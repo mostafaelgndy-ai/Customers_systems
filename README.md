@@ -51,6 +51,77 @@ docker compose up --build
 - PostgreSQL: localhost:5432, Redis: 6379
 - The backend container runs `alembic upgrade head` before starting.
 
+## Run
+
+### Option 1: Local Python (no Docker) — recommended for development
+
+**1. Backend**
+
+```bash
+cd backend
+
+# Create virtual environment (one-time)
+python -m venv ../.venv
+
+# Activate and install dependencies
+../.venv/Scripts/pip install -e . --no-deps        # Windows PowerShell
+../.venv/Scripts/pip install fastapi uvicorn pydantic pydantic-settings sqlalchemy alembic psycopg-binary psycopg celery[redis] pandas pyjwt bcrypt python-multipart email-validator pytest httpx ruff mypy pyyaml
+
+# Copy environment file
+copy ..\.env.example .env          # Windows PowerShell
+# or: cp ../.env.example .env      # bash
+
+# Run tests (optional, verifies everything works)
+../.venv/Scripts/pytest
+
+# Start the API server
+../.venv/Scripts/uvicorn app.main:app --port 8000
+```
+
+**2. Frontend** (in a separate terminal)
+
+```bash
+cd frontend
+
+# Install dependencies (one-time)
+npm install
+
+# Start the Next.js dev server
+set NEXT_PUBLIC_API_URL=http://localhost:8000   # Windows PowerShell
+# export NEXT_PUBLIC_API_URL=http://localhost:8000   # bash/macOS/Linux
+npm run dev
+```
+
+**3. Verify both are running**
+
+| Service | URL | Health Check |
+|---------|-----|--------------|
+| Backend API | http://localhost:8000 | `GET /api/v1/health` → `{"status":"ok"}` |
+| Frontend | http://localhost:3000 | Dashboard shell loads |
+| API docs | http://localhost:8000/docs | Swagger UI |
+
+### Option 2: Docker (full stack)
+
+```bash
+docker compose up --build
+```
+
+- Backend API: http://localhost:8000 (docs at `/docs`)
+- Frontend: http://localhost:3000
+- PostgreSQL: localhost:5432
+- Redis: localhost:6379
+
+The backend container runs `alembic upgrade head` before starting.
+
+### Ports
+
+| Port | Service |
+|------|---------|
+| 8000 | Backend API (FastAPI + Uvicorn) |
+| 3000 | Frontend (Next.js) |
+| 5432 | PostgreSQL (Docker only) |
+| 6379 | Redis (Docker only) |
+
 ## Engineering standards
 
 - **Formatting/linting:** `ruff format` + `ruff check` (config in

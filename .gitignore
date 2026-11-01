@@ -14,6 +14,9 @@ build/
 
 # --- Node ---
 node_modules/
+
+# Next.js generated types
+next-env.d.ts
 .next/
 out/
 .turbo/

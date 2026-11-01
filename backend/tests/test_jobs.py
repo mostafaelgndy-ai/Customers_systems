@@ -29,12 +29,8 @@ def _queued_mode(monkeypatch):
 def test_cancel_queued_validation(client, org_a_owner, monkeypatch, _queued_mode) -> None:
     headers = org_a_owner["headers"]
     dataset_id = create_dataset(client, headers)
-    customers = upload_fixture(
-        client, headers, dataset_id, kind="customers", filename="valid_customers.csv"
-    )
-    orders = upload_fixture(
-        client, headers, dataset_id, kind="orders", filename="valid_orders.csv"
-    )
+    customers = upload_fixture(client, headers, dataset_id, kind="customers", filename="valid_customers.csv")
+    orders = upload_fixture(client, headers, dataset_id, kind="orders", filename="valid_orders.csv")
     apply_suggested_mapping(client, headers, dataset_id, customers["file"]["id"], "customers")
     apply_suggested_mapping(client, headers, dataset_id, orders["file"]["id"], "orders")
 
@@ -50,9 +46,7 @@ def test_cancel_queued_validation(client, org_a_owner, monkeypatch, _queued_mode
     version_id = response.json()["version"]["id"]
     assert _queued_mode  # job was dispatched to the (mocked) queue
 
-    cancel = client.post(
-        f"/api/v1/datasets/{dataset_id}/versions/{version_id}/cancel", headers=headers
-    )
+    cancel = client.post(f"/api/v1/datasets/{dataset_id}/versions/{version_id}/cancel", headers=headers)
     assert cancel.status_code == 200
     assert cancel.json()["version"]["status"] == "cancelled"
 
@@ -60,12 +54,8 @@ def test_cancel_queued_validation(client, org_a_owner, monkeypatch, _queued_mode
 def test_cancel_fails_when_already_final(client, org_a_owner) -> None:
     headers = org_a_owner["headers"]
     dataset_id = create_dataset(client, headers)
-    customers = upload_fixture(
-        client, headers, dataset_id, kind="customers", filename="valid_customers.csv"
-    )
-    orders = upload_fixture(
-        client, headers, dataset_id, kind="orders", filename="valid_orders.csv"
-    )
+    customers = upload_fixture(client, headers, dataset_id, kind="customers", filename="valid_customers.csv")
+    orders = upload_fixture(client, headers, dataset_id, kind="orders", filename="valid_orders.csv")
     apply_suggested_mapping(client, headers, dataset_id, customers["file"]["id"], "customers")
     apply_suggested_mapping(client, headers, dataset_id, orders["file"]["id"], "orders")
     version_id = client.post(
@@ -77,18 +67,14 @@ def test_cancel_fails_when_already_final(client, org_a_owner) -> None:
         headers=headers,
     ).json()["version"]["id"]
     # Inline mode already finished the job; cancel must refuse.
-    cancel = client.post(
-        f"/api/v1/datasets/{dataset_id}/versions/{version_id}/cancel", headers=headers
-    )
+    cancel = client.post(f"/api/v1/datasets/{dataset_id}/versions/{version_id}/cancel", headers=headers)
     assert cancel.status_code == 409
 
 
 def test_retry_failed_version_inline(client, org_a_owner, app_db) -> None:
     headers = org_a_owner["headers"]
     dataset_id = create_dataset(client, headers)
-    customers = upload_fixture(
-        client, headers, dataset_id, kind="customers", filename="valid_customers.csv"
-    )
+    customers = upload_fixture(client, headers, dataset_id, kind="customers", filename="valid_customers.csv")
     empty = upload_csv_text(
         client,
         headers,
@@ -120,8 +106,6 @@ def test_retry_failed_version_inline(client, org_a_owner, app_db) -> None:
     db.commit()
     db.close()
 
-    retry = client.post(
-        f"/api/v1/datasets/{dataset_id}/versions/{version_id}/retry", headers=headers
-    )
+    retry = client.post(f"/api/v1/datasets/{dataset_id}/versions/{version_id}/retry", headers=headers)
     assert retry.status_code == 200, retry.text
     assert retry.json()["version"]["status"] == "valid"

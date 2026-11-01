@@ -18,6 +18,7 @@ from app.core.logging import configure_logging
 from app.core.middleware import RequestLoggingMiddleware
 from app.db.session import engine
 from app.domains.datasets.router import router as datasets_router
+from app.domains.features.router import router as features_router
 from app.domains.identity.router import router as identity_router
 from app.domains.jobs.router import router as jobs_router
 
@@ -29,6 +30,7 @@ def _include_routers(app: FastAPI) -> None:
     prefix = "/api/v1"
     app.include_router(identity_router, prefix=prefix)
     app.include_router(datasets_router, prefix=prefix)
+    app.include_router(features_router, prefix=prefix)
     app.include_router(jobs_router, prefix=prefix)
 
 
@@ -63,8 +65,10 @@ def _health_router(app: FastAPI) -> None:
 @contextlib.asynccontextmanager
 async def _lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     from app.domains.datasets import jobs as dataset_jobs
+    from app.domains.features import jobs as feature_jobs
 
     dataset_jobs.register()  # ensure handlers registered in every entrypoint
+    feature_jobs.register()  # ensure feature job handlers registered
     logger.info("startup completed")
     yield
     logger.info("shutdown completed")
