@@ -1,0 +1,4 @@
+Order ID,Customer,Order Date,Status,Grand Total,Curr,Discount,Shipping,Items
+O-70001,C-1001,2025-03-01 10:15:00,completed,120.00,USD,0.00,10.00,2
+O-70002,C-1001,2025-05-12 18:40:00,completed,89.50,USD,5.00,10.00,1
+O-70003,C-1002,2025-05-20 12:00:00,completed,45.25,USD,0.00,5.00,1

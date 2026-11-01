@@ -1,0 +1,10 @@
+order_id,customer_id,order_date,order_status,order_amount,currency,discount_amount,shipping_amount,item_count
+O-9001,C-1001,2025-05-01 10:00:00,completed,50.00,USD,0.00,0.00,1
+O-9001,C-1001,2025-05-02 10:00:00,completed,50.00,USD,0.00,0.00,1
+O-9002,C-9999,2025-05-03 10:00:00,completed,20.00,USD,0.00,0.00,1
+O-9003,C-1001,2025-05-04 10:00:00,weird_status,20.00,USD,0.00,0.00,1
+O-9004,C-1001,not-a-date,completed,20.00,EUR,0.00,0.00,1
+O-9005,C-1001,2025-05-06 10:00:00,completed,-5.00,USD,0.00,0.00,1
+O-9006,C-1001,2025-05-07 10:00:00,completed,20.00,USD,30.00,0.00,1
+O-9007,C-1001,2025-05-08 10:00:00,completed,20.00,USD,0.00,0.00,abc
+O-9008,C-1001,2025-05-09T10:00:00Z,completed,20.00,USD,0.00,0.00,1

@@ -1,0 +1,91 @@
+"""CustomerIQ API entrypoint (FastAPI factory).
+
+Mounts identity, datasets, and jobs domains; wires structured logging,
+correlation middleware, and the error envelope.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import logging
+
+import sqlalchemy as sa
+from fastapi import FastAPI
+
+from app.core.config import settings
+from app.core.errors import register_exception_handlers
+from app.core.logging import configure_logging
+from app.core.middleware import RequestLoggingMiddleware
+from app.db.session import engine
+from app.domains.datasets.router import router as datasets_router
+from app.domains.identity.router import router as identity_router
+from app.domains.jobs.router import router as jobs_router
+
+configure_logging(settings.log_level)
+logger = logging.getLogger("api")
+
+
+def _include_routers(app: FastAPI) -> None:
+    prefix = "/api/v1"
+    app.include_router(identity_router, prefix=prefix)
+    app.include_router(datasets_router, prefix=prefix)
+    app.include_router(jobs_router, prefix=prefix)
+
+
+def _health_router(app: FastAPI) -> None:
+    @app.get("/api/v1/health", tags=["health"])
+    @app.get("/health", include_in_schema=False)
+    def health() -> dict:
+        # Liveness only: must never touch dependencies.
+        return {"status": "ok", "environment": settings.environment}
+
+    @app.get("/api/v1/health/readiness", tags=["health"])
+    def readiness() -> dict:
+        checks: dict[str, str] = {}
+        try:
+            with engine.connect() as conn:
+                conn.execute(sa.text("SELECT 1"))
+            checks["database"] = "ok"
+        except Exception:  # noqa: BLE001 - readiness aggregates, never leaks internals
+            checks["database"] = "unavailable"
+        try:
+            import redis  # deferred import: not needed at process start
+
+            client = redis.Redis.from_url(settings.redis_url, socket_connect_timeout=2)
+            client.ping()
+            checks["redis"] = "ok"
+        except Exception:  # noqa: BLE001
+            checks["redis"] = "unavailable"
+        ok = all(v == "ok" for v in checks.values())
+        return {"status": "ok" if ok else "degraded", "checks": checks}
+
+
+@contextlib.asynccontextmanager
+async def _lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
+    from app.domains.datasets import jobs as dataset_jobs
+
+    dataset_jobs.register()  # ensure handlers registered in every entrypoint
+    logger.info("startup completed")
+    yield
+    logger.info("shutdown completed")
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title="CustomerIQ API",
+        version="0.1.0",
+        description=(
+            "B2B customer intelligence: CSV ingestion & validation, churn "
+            "prediction, and segmentation. See docs/ for contracts."
+        ),
+        lifespan=_lifespan,
+    )
+
+    _health_router(app)
+    app.add_middleware(RequestLoggingMiddleware)
+    _include_routers(app)
+    register_exception_handlers(app)
+    return app
+
+
+app = create_app()

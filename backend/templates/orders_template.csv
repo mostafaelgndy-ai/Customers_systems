@@ -1,0 +1,7 @@
+order_id,customer_id,order_date,order_status,order_amount,currency,discount_amount,shipping_amount,item_count
+O-50001,C-1001,2025-03-01 10:15:00,completed,120.00,USD,0.00,10.00,2
+O-50002,C-1001,2025-05-12 18:40:00,completed,89.50,USD,5.00,10.00,1
+O-50003,C-1002,2025-05-20 12:00:00,completed,45.25,USD,0.00,5.00,1
+O-50004,C-1003,2025-06-02 09:05:00,completed,210.00,USD,10.00,15.00,3
+O-50005,C-1004,2025-06-15 21:30:00,refunded,60.00,USD,0.00,5.00,1
+O-50006,C-1005,2025-07-01 08:55:00,completed,30.00,USD,0.00,5.00,1

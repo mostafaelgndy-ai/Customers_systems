@@ -1,0 +1,6 @@
+customer_id,created_at,country,acquisition_channel,customer_status
+C-1001,2025-01-05T09:20:00,US,google,active
+C-1002,2025-01-18T14:05:00,US,facebook,active
+C-1003,2025-02-02T11:45:00,CA,referral,active
+C-1004,2025-02-22T16:30:00,GB,google,active
+C-1005,2025-03-10T08:10:00,US,email,active
