@@ -25,7 +25,9 @@ FIXTURES_DIR = pathlib.Path(__file__).parent / "fixtures"
 
 
 # Ensure all model modules are imported before create_all.
+from app.domains.churn import models as _churn_models  # noqa: E402,F401
 from app.domains.datasets import models as _datasets_models  # noqa: E402,F401
+from app.domains.features import models as _features_models  # noqa: E402,F401
 from app.domains.identity import models as _identity_models  # noqa: E402,F401
 from app.domains.jobs import models as _jobs_models  # noqa: E402,F401
 

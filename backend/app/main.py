@@ -1,7 +1,7 @@
 """CustomerIQ API entrypoint (FastAPI factory).
 
-Mounts identity, datasets, and jobs domains; wires structured logging,
-correlation middleware, and the error envelope.
+Mounts identity, datasets, features, churn, and jobs domains; wires
+structured logging, correlation middleware, and the error envelope.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestLoggingMiddleware
 from app.db.session import engine
+from app.domains.churn.router import router as churn_router
 from app.domains.datasets.router import router as datasets_router
 from app.domains.features.router import router as features_router
 from app.domains.identity.router import router as identity_router
@@ -31,6 +32,7 @@ def _include_routers(app: FastAPI) -> None:
     app.include_router(identity_router, prefix=prefix)
     app.include_router(datasets_router, prefix=prefix)
     app.include_router(features_router, prefix=prefix)
+    app.include_router(churn_router, prefix=prefix)
     app.include_router(jobs_router, prefix=prefix)
 
 

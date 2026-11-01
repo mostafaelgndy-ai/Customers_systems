@@ -25,6 +25,7 @@ from app.core.pagination import PageParams, build_page
 from app.db.session import get_db
 from app.domains.datasets import service as ds_service
 from app.domains.datasets import storage
+from app.domains.datasets.eda import compute_eda
 from app.domains.datasets.mapping import CANONICAL_SCHEMAS, suggest_mapping, validate_mapping
 from app.domains.datasets.models import (
     FILE_KINDS,
@@ -348,6 +349,24 @@ def get_version(
         payload["job_status"] = job.status
         payload["progress"] = job.progress
     return payload
+
+
+@router.get("/{dataset_id}/versions/{version_id}/eda")
+def get_version_eda(
+    dataset_id: uuid.UUID,
+    version_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    membership: Membership = Depends(require_membership),
+) -> dict:
+    """Reproducible EDA report for a dataset version (FE-01)."""
+    dataset = ds_service.get_scoped_dataset(db, membership.organization_id, dataset_id)
+    version = ds_service.get_scoped_version(db, membership.organization_id, dataset, version_id)
+
+    customers_df, orders_df = ds_service.load_version_frames(db, version)
+    report = compute_eda(customers_df, orders_df)
+    report["dataset_version_id"] = str(version.id)
+    report["version_number"] = version.version_number
+    return {"eda": report}
 
 
 def _latest_job_for(db: Session, org_id: uuid.UUID, version_id: str) -> Job | None:

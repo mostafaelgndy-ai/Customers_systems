@@ -188,6 +188,33 @@ def store_file(
     return dataset_file
 
 
+def load_version_frames(db: Session, version: DatasetVersion) -> tuple:
+    """Canonicalize a version's customers and orders files into DataFrames.
+
+    Raises CONFLICT when either file is missing from the version.
+    """
+    import pandas as pd
+
+    from app.domains.datasets.storage import read_file_bytes
+    from app.domains.datasets.validation import canonicalize
+
+    frames: dict[str, pd.DataFrame] = {}
+    for link in version.file_links:
+        file = db.scalar(select(DatasetFile).where(DatasetFile.id == link.dataset_file_id))
+        if file is None:
+            continue
+        frames[link.file_kind] = canonicalize(read_file_bytes(file.storage_path), link.file_kind, file.mapping or {})
+    missing = [kind for kind in ("customers", "orders") if kind not in frames]
+    unexpected = [kind for kind in frames if kind not in ("customers", "orders")]
+    if missing or unexpected:
+        raise APIError(
+            "Dataset version requires exactly one customers and one orders file.",
+            409,
+            code="CONFLICT",
+        )
+    return frames["customers"], frames["orders"]
+
+
 def latest_version(db: Session, dataset_id: uuid.UUID) -> DatasetVersion | None:
     return db.scalar(
         select(DatasetVersion)

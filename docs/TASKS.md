@@ -171,37 +171,37 @@ critical data rules are covered by tests.
 
 ## Phase 3 --- Exploratory Data Analysis and Feature Engineering
 
--   [ ] **FE-01 (P0):** Build a reproducible EDA notebook or report for
+-   [x] **FE-01 (P0):** Build a reproducible EDA notebook or report for
     each dataset version.
     -   Acceptance: report includes row counts, date coverage, unique
         customers/orders, missingness, duplicates, order statuses, and
         monetary distributions.
--   [ ] **FE-02 (P0):** Implement eligible-order filtering.
+-   [x] **FE-02 (P0):** Implement eligible-order filtering.
     -   Acceptance: feature calculations use only orders allowed by the
         documented policy.
--   [ ] **FE-03 (P0):** Implement customer-level RFM features.
+-   [x] **FE-03 (P0):** Implement customer-level RFM features.
     -   Acceptance: recency, frequency, and monetary values match
         hand-calculated test cases.
--   [ ] **FE-04 (P0):** Implement average order value and tenure.
+-   [x] **FE-04 (P0):** Implement average order value and tenure.
     -   Acceptance: edge cases for one order, missing creation date, and
         no eligible orders are tested.
--   [ ] **FE-05 (P1):** Implement rolling 30-day and 90-day features.
+-   [x] **FE-05 (P1):** Implement rolling 30-day and 90-day features.
     -   Acceptance: windows are cutoff-aware and covered by
         boundary-date tests.
--   [ ] **FE-06 (P1):** Implement purchase-interval and discount/refund
+-   [x] **FE-06 (P1):** Implement purchase-interval and discount/refund
     features where data supports them.
     -   Acceptance: missing source fields do not silently become
         misleading zero values.
--   [ ] **FE-07 (P0):** Define feature schema and version.
+-   [x] **FE-07 (P0):** Define feature schema and version.
     -   Acceptance: every feature has name, definition, type, source,
         cutoff behavior, and missing-value policy.
--   [ ] **FE-08 (P0):** Implement deterministic feature pipeline.
+-   [x] **FE-08 (P0):** Implement deterministic feature pipeline.
     -   Acceptance: same input version and configuration produce
         identical feature values.
--   [ ] **FE-09 (P0):** Add temporal leakage tests.
+-   [x] **FE-09 (P0):** Add temporal leakage tests.
     -   Acceptance: changing post-cutoff orders cannot change pre-cutoff
         features.
--   [ ] **FE-10 (P0):** Persist feature snapshots and metadata.
+-   [x] **FE-10 (P0):** Persist feature snapshots and metadata.
     -   Acceptance: snapshot links to organization, dataset version,
         cutoff, and feature version.
 
@@ -214,21 +214,21 @@ post-cutoff information.
 
 ### 4.1 Label design
 
--   [ ] **CHURN-01 (P0):** Implement configurable observation window and
+-   [x] **CHURN-01 (P0):** Implement configurable observation window and
     label horizon.
     -   Initial experimental default: 180-day observation window and
         90-day future inactivity horizon.
     -   Acceptance: values are stored in run configuration and displayed
         in reports.
--   [ ] **CHURN-02 (P0):** Implement eligibility rules for label
+-   [x] **CHURN-02 (P0):** Implement eligibility rules for label
     generation.
     -   Acceptance: customers without a fully observable label horizon
         are excluded, not mislabeled.
--   [ ] **CHURN-03 (P0):** Generate churn labels using only future
+-   [x] **CHURN-03 (P0):** Generate churn labels using only future
     outcome data relative to cutoff.
     -   Acceptance: unit tests cover boundary dates and repeat
         purchases.
--   [ ] **CHURN-04 (P0):** Report positive/negative class counts and
+-   [x] **CHURN-04 (P0):** Report positive/negative class counts and
     rates.
     -   Acceptance: class distribution is visible before model training.
 

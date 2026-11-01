@@ -48,9 +48,12 @@ class ChurnLabel(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = orm.mapped_column(sa.Uuid(), primary_key=True, default=uuid.uuid4)
     organization_id: Mapped[uuid.UUID] = orm.mapped_column(sa.Uuid(), index=True, nullable=False)
     dataset_version_id: Mapped[uuid.UUID] = orm.mapped_column(sa.Uuid(), index=True, nullable=False)
-    feature_run_id: Mapped[uuid.UUID] = orm.mapped_column(sa.Uuid(), index=True, nullable=False)
+    # Labels derive from orders, not features; feature runs are linked at
+    # scoring time (CHURN-13/17), so this stays nullable for now.
+    feature_run_id: Mapped[uuid.UUID | None] = orm.mapped_column(sa.Uuid(), index=True, nullable=True)
     customer_id: Mapped[str] = orm.mapped_column(sa.String(200), nullable=False, index=True)
     cutoff_date: Mapped[str] = orm.mapped_column(sa.String(32), nullable=False)
+    observation_window_days: Mapped[int] = orm.mapped_column(sa.Integer, nullable=False, default=180)
     label_horizon_days: Mapped[int] = orm.mapped_column(sa.Integer, nullable=False)
     label: Mapped[str] = orm.mapped_column(sa.String(20), nullable=False)  # churned | active | ineligible
     days_since_last_order: Mapped[int | None] = orm.mapped_column(sa.Integer, nullable=True)
@@ -62,7 +65,8 @@ class ChurnLabel(Base, TimestampMixin):
             "dataset_version_id",
             "customer_id",
             "cutoff_date",
-            name="uq_churn_label_org_version_customer_cutoff",
+            "label_horizon_days",
+            name="uq_churn_label_org_version_customer_cutoff_horizon",
         ),
     )
 
