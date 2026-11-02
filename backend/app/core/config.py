@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     max_upload_mb: int = 50
     allowed_upload_extensions: tuple[str, ...] = (".csv", ".txt")
 
+    # --- trained model artifacts (CHURN-12) ---
+    models_dir: Path = Path("data/models")
+
     # --- validation engine defaults (Phase 3/4 pipelines may relax these) ---
     exclude_order_statuses: tuple[str, ...] = (
         "pending",

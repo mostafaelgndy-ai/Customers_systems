@@ -66,11 +66,13 @@ def _health_router(app: FastAPI) -> None:
 
 @contextlib.asynccontextmanager
 async def _lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
+    from app.domains.churn import jobs as churn_jobs
     from app.domains.datasets import jobs as dataset_jobs
     from app.domains.features import jobs as feature_jobs
 
     dataset_jobs.register()  # ensure handlers registered in every entrypoint
     feature_jobs.register()  # ensure feature job handlers registered
+    churn_jobs.register()  # ensure churn training handler registered
     logger.info("startup completed")
     yield
     logger.info("shutdown completed")

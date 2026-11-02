@@ -83,7 +83,9 @@ class ChurnModelRun(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = orm.mapped_column(sa.Uuid(), primary_key=True, default=uuid.uuid4)
     organization_id: Mapped[uuid.UUID] = orm.mapped_column(sa.Uuid(), index=True, nullable=False)
     dataset_version_id: Mapped[uuid.UUID] = orm.mapped_column(sa.Uuid(), index=True, nullable=False)
-    feature_run_id: Mapped[uuid.UUID] = orm.mapped_column(sa.Uuid(), index=True, nullable=False)
+    # Training derives features internally; a feature run may be linked for
+    # traceability later (CHURN-17), so this stays nullable.
+    feature_run_id: Mapped[uuid.UUID | None] = orm.mapped_column(sa.Uuid(), index=True, nullable=True)
     model_type: Mapped[str] = orm.mapped_column(sa.String(40), nullable=False)  # logistic_regression | random_forest
     observation_window_days: Mapped[int] = orm.mapped_column(sa.Integer, nullable=False)
     label_horizon_days: Mapped[int] = orm.mapped_column(sa.Integer, nullable=False)

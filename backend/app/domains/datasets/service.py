@@ -58,6 +58,19 @@ def get_scoped_version(db: Session, org_id: uuid.UUID, dataset: Dataset, version
     return version
 
 
+def get_scoped_version_by_id(db: Session, org_id: uuid.UUID, version_id: uuid.UUID) -> DatasetVersion:
+    """Load a dataset version by id, scoped to the organization only."""
+    version = db.scalar(
+        select(DatasetVersion).where(
+            DatasetVersion.id == version_id,
+            DatasetVersion.organization_id == org_id,
+        )
+    )
+    if version is None:
+        raise APIError("Dataset version not found.", 404, code="NOT_FOUND")
+    return version
+
+
 def next_version_number(db: Session, dataset_id: uuid.UUID) -> int:
     current = db.scalar(
         select(DatasetVersion.version_number)

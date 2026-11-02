@@ -234,29 +234,29 @@ post-cutoff information.
 
 ### 4.2 Training and evaluation
 
--   [ ] **CHURN-05 (P0):** Build time-aware train/validation/test split.
+-   [x] **CHURN-05 (P0):** Build time-aware train/validation/test split.
     -   Acceptance: training observations precede validation and test
         periods; no customer/time leakage under the chosen design.
--   [ ] **CHURN-06 (P0):** Train Logistic Regression baseline.
+-   [x] **CHURN-06 (P0):** Train Logistic Regression baseline.
     -   Acceptance: preprocessing and estimator are saved as one
         reproducible pipeline.
--   [ ] **CHURN-07 (P0):** Train a tree-based benchmark (Random Forest
+-   [x] **CHURN-07 (P0):** Train a tree-based benchmark (Random Forest
     or Gradient Boosting).
     -   Acceptance: same split and comparable feature contract are used.
--   [ ] **CHURN-08 (P0):** Calculate precision, recall, F1, ROC-AUC,
+-   [x] **CHURN-08 (P0):** Calculate precision, recall, F1, ROC-AUC,
     PR-AUC, and confusion matrix.
     -   Acceptance: undefined metrics are handled explicitly; class
         imbalance is reported.
--   [ ] **CHURN-09 (P0):** Evaluate threshold trade-offs and top-k
+-   [x] **CHURN-09 (P0):** Evaluate threshold trade-offs and top-k
     precision/recall.
     -   Acceptance: report shows results at realistic contact capacity.
--   [ ] **CHURN-10 (P1):** Evaluate probability calibration.
+-   [x] **CHURN-10 (P1):** Evaluate probability calibration.
     -   Acceptance: reliability plot and calibration metric are included
         before probability claims are made.
--   [ ] **CHURN-11 (P0):** Create model comparison report.
+-   [x] **CHURN-11 (P0):** Create model comparison report.
     -   Acceptance: model selection rationale considers operational
         trade-offs, not accuracy alone.
--   [ ] **CHURN-12 (P0):** Save model artifact and full training
+-   [x] **CHURN-12 (P0):** Save model artifact and full training
     metadata.
     -   Acceptance: artifact includes feature version, dataset version,
         cutoff, label horizon, split, parameters, metrics, and

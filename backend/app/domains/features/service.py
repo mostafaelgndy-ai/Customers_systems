@@ -14,7 +14,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import APIError
-from app.domains.datasets.models import VERSION_VALID, DatasetVersion
+from app.domains.datasets.models import VERSION_VALID
+from app.domains.datasets.service import get_scoped_version_by_id
 from app.domains.datasets.storage import read_file_bytes
 from app.domains.features.models import (
     FEATURE_RUN_FAILED,
@@ -28,19 +29,6 @@ from app.domains.identity.deps import role_checker
 from app.domains.jobs.queue import enqueue
 
 _FEATURE_RUN_ROLES = role_checker("owner", "admin", "analyst")
-
-
-def _get_scoped_version(db: Session, org_id: uuid.UUID, dataset_version_id: uuid.UUID) -> DatasetVersion:
-    """Load a dataset version by id, scoped to the organization."""
-    version = db.scalar(
-        select(DatasetVersion).where(
-            DatasetVersion.id == dataset_version_id,
-            DatasetVersion.organization_id == org_id,
-        )
-    )
-    if version is None:
-        raise APIError("Dataset version not found.", 404, code="NOT_FOUND")
-    return version
 
 
 def get_scoped_run(db: Session, org_id: uuid.UUID, dataset_version_id: uuid.UUID, run_id: uuid.UUID) -> FeatureRun:
@@ -69,7 +57,7 @@ def create_feature_run(
 
     Validates that the dataset version is valid before queueing the run.
     """
-    version = _get_scoped_version(db, org_id, dataset_version_id)
+    version = get_scoped_version_by_id(db, org_id, dataset_version_id)
     if version.status != VERSION_VALID:
         raise APIError(
             f"Dataset version is '{version.status}'; must be 'valid' to compute features.",
@@ -132,7 +120,7 @@ def execute_feature_run(
 
     try:
         # Load the dataset version files
-        version = _get_scoped_version(db, run.organization_id, run.dataset_version_id)
+        version = get_scoped_version_by_id(db, run.organization_id, run.dataset_version_id)
 
         # Read customer and order file bytes
         file_links = version.file_links
