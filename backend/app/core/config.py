@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     # --- trained model artifacts (CHURN-12) ---
     models_dir: Path = Path("data/models")
 
+    # --- risk bands (CHURN-14): configuration, not hardcoded business truth ---
+    risk_band_low_max: float = 0.30  # probability < low_max  → "low"
+    risk_band_high_min: float = 0.70  # probability >= high_min → "high"
+
     # --- validation engine defaults (Phase 3/4 pipelines may relax these) ---
     exclude_order_statuses: tuple[str, ...] = (
         "pending",

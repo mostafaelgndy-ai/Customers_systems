@@ -38,6 +38,22 @@ DEFAULT_LABEL_HORIZON_DAYS = 90
 # Feature schema version (FE-07) — bump when computation changes.
 FEATURE_VERSION = "1.0.0"
 
+# Canonical model input columns (subset of the schema) shared by churn
+# training (CHURN-05..12) and scoring/explanations (CHURN-13..16).
+FEATURE_COLUMNS = (
+    "recency_days",
+    "frequency",
+    "monetary_value",
+    "avg_order_value",
+    "tenure_days",
+    "orders_30d",
+    "orders_90d",
+    "monetary_30d",
+    "monetary_90d",
+    "avg_purchase_interval_days",
+    "discount_total",
+)
+
 
 @dataclass(frozen=True)
 class FeatureConfig:

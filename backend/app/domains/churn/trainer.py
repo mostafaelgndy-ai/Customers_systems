@@ -58,21 +58,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from app.domains.churn.labeling import LabelConfig, generate_labels
-from app.domains.features.pipeline import FEATURE_VERSION, FeatureConfig, compute_features
-
-FEATURE_COLUMNS = (
-    "recency_days",
-    "frequency",
-    "monetary_value",
-    "avg_order_value",
-    "tenure_days",
-    "orders_30d",
-    "orders_90d",
-    "monetary_30d",
-    "monetary_90d",
-    "avg_purchase_interval_days",
-    "discount_total",
-)
+from app.domains.churn.scoring import global_importance
+from app.domains.features.pipeline import FEATURE_COLUMNS, FEATURE_VERSION, FeatureConfig, compute_features
 
 PERIOD_NAMES = ("train", "validation", "test")
 
@@ -447,6 +434,9 @@ def _evaluate_periods(
         for name, prob in val_probs.items()
     }
 
+    # CHURN-15: model-appropriate global interpretation for every candidate.
+    evaluation["global_importance"] = {name: global_importance(pipeline, name) for name, pipeline in fitted.items()}
+
     evaluation["selection"] = _select_model(evaluation["validation"], config)
     return evaluation, fitted
 
@@ -572,6 +562,7 @@ def train_churn_models(
         "random_seed": config.random_seed,
         "threshold_analysis": evaluation["threshold_analysis"],
         "calibration": evaluation["calibration"],
+        "global_importance": evaluation["global_importance"],
         "selection": evaluation["selection"],
         "dependency_versions": _dependency_versions(),
         "warnings": periods.warnings,

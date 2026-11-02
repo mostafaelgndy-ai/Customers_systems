@@ -112,6 +112,8 @@ class ChurnScore(Base, TimestampMixin):
     customer_id: Mapped[str] = orm.mapped_column(sa.String(200), nullable=False, index=True)
     churn_probability: Mapped[float] = orm.mapped_column(sa.Float, nullable=False)
     risk_band: Mapped[str] = orm.mapped_column(sa.String(20), nullable=False)  # low | medium | high
+    # Per-customer top supporting signals (CHURN-16); association-based, never causal.
+    explanation: Mapped[dict | None] = orm.mapped_column(sa.JSON, nullable=True)
     cutoff_date: Mapped[str] = orm.mapped_column(sa.String(32), nullable=False)
     created_by_user_id: Mapped[uuid.UUID] = orm.mapped_column(sa.Uuid(), nullable=False)
 

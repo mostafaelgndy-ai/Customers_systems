@@ -1,4 +1,4 @@
-"""Churn labeling and model training services (CHURN-01..12).
+"""Churn labeling, model training, and scoring services (CHURN-01..17).
 
 - Labels: one (cutoff, horizon) configuration produces one replaceable
   label set per dataset version; re-generating is idempotent
@@ -6,6 +6,12 @@
 - Model runs: a training run derives its own time-aware split, trains
   the LR baseline and RF benchmark, evaluates, and stores the selected
   model artifact plus full metadata (CHURN-05..12).
+- Scoring: a scoring run batches predictions for every eligible customer
+  from a succeeded model run's immutable artifact, applies configured
+  risk bands, and stores per-customer explanations (CHURN-13..16). Every
+  stored score references its `churn_model_runs` row (model version) and
+  the immutable Job row records the scoring analysis run itself
+  (CHURN-17).
 """
 
 from __future__ import annotations
@@ -16,6 +22,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -29,6 +36,13 @@ from app.domains.churn.models import (
     MODEL_RUN_SUCCEEDED,
     ChurnLabel,
     ChurnModelRun,
+    ChurnScore,
+)
+from app.domains.churn.scoring import (
+    explain_customer,
+    risk_band,
+    score_eligible_customers,
+    validate_band_thresholds,
 )
 from app.domains.churn.trainer import TrainingConfig, save_artifacts, train_churn_models
 from app.domains.datasets.models import VERSION_VALID
@@ -38,6 +52,7 @@ from app.domains.datasets.service import (
     get_scoped_version_by_id,
     load_version_frames,
 )
+from app.domains.features.pipeline import FEATURE_VERSION
 from app.domains.identity.deps import role_checker
 from app.domains.jobs.queue import enqueue
 
@@ -370,3 +385,200 @@ def get_model_run(db: Session, org_id: uuid.UUID, run_id: uuid.UUID) -> ChurnMod
     if run is None:
         raise APIError("Model run not found.", 404, code="NOT_FOUND")
     return run
+
+
+# --- batch scoring (CHURN-13, CHURN-14, CHURN-16, CHURN-17) --------------------
+
+
+def create_score_run(
+    db: Session,
+    *,
+    org_id: uuid.UUID,
+    user_id: uuid.UUID,
+    model_run_id: uuid.UUID,
+    low_band_max: float | None = None,
+    high_band_min: float | None = None,
+):
+    """Queue a scoring run against a succeeded model run (CHURN-13).
+
+    Risk band thresholds default to `Settings` values (CHURN-14:
+    configuration, not hardcoded business truth); explicit values must
+    satisfy 0 <= low_band_max <= high_band_min <= 1. The Job row returned
+    is the immutable analysis-run record the scores refer to (CHURN-17).
+    """
+    run = get_model_run(db, org_id, model_run_id)
+    if run.status != MODEL_RUN_SUCCEEDED or not run.artifact_path:
+        raise APIError(
+            f"Model run status is '{run.status}'; scoring requires a 'succeeded' run.",
+            409,
+            code="CONFLICT",
+        )
+    low = settings.risk_band_low_max if low_band_max is None else low_band_max
+    high = settings.risk_band_high_min if high_band_min is None else high_band_min
+    try:
+        low, high = validate_band_thresholds(low, high)
+    except ValueError as exc:
+        raise APIError(str(exc), 400, code="BAD_REQUEST") from exc
+
+    job = enqueue(
+        db,
+        job_type="score_churn_model",
+        organization_id=org_id,
+        created_by_user_id=user_id,
+        payload={
+            "model_run_id": str(model_run_id),
+            "low_band_max": low,
+            "high_band_min": high,
+        },
+    )
+    db.commit()
+    return job
+
+
+def execute_score_run(
+    db: Session,
+    *,
+    model_run_id: uuid.UUID,
+    low_band_max: float = 0.30,
+    high_band_min: float = 0.70,
+    scoring_run_id: str | None = None,
+) -> dict[str, Any]:
+    """Execute a scoring run (CHURN-13..17).
+
+    Loads the succeeded model run's persisted pipeline, computes features
+    at the data cutoff, scores eligible customers, applies the configured
+    risk bands, and replaces the previous scores for this run (idempotent,
+    like labels). Response carries counts per band and the traceability
+    ids (CHURN-17).
+    """
+    from app.domains.churn.trainer import FEATURE_COLUMNS  # single source of truth
+
+    low, high = validate_band_thresholds(low_band_max, high_band_min)
+    run = db.scalar(select(ChurnModelRun).where(ChurnModelRun.id == model_run_id))
+    if run is None:
+        raise APIError("Model run not found.", 404, code="NOT_FOUND")
+    if run.status != MODEL_RUN_SUCCEEDED or not run.artifact_path:
+        raise APIError(f"Model run status is '{run.status}'; cannot score.", 409, code="CONFLICT")
+
+    artifact_file = Path(run.artifact_path) / f"{run.model_type}.joblib"
+    if not artifact_file.exists():
+        raise APIError(
+            f"Model artifact '{run.model_type}.joblib' is missing for this run.",
+            409,
+            code="CONFLICT",
+        )
+
+    import joblib
+
+    pipeline = joblib.load(artifact_file)
+    version = get_scoped_version_by_id(db, run.organization_id, run.dataset_version_id)
+    customers_df, orders_df = load_version_frames(db, version)
+
+    scored, cutoff = score_eligible_customers(
+        customers_df,
+        orders_df,
+        pipeline,
+        observation_window_days=run.observation_window_days,
+    )
+    population = scored[list(FEATURE_COLUMNS)]
+
+    # Idempotent replace: one prediction per eligible customer per run.
+    previous = db.scalars(
+        select(ChurnScore).where(
+            ChurnScore.organization_id == run.organization_id,
+            ChurnScore.model_run_id == run.id,
+        )
+    ).all()
+    for row in previous:
+        db.delete(row)
+    db.flush()  # deletes must land before re-inserting the same unique keys
+
+    band_counts = {"low": 0, "medium": 0, "high": 0}
+    new_rows: list[ChurnScore] = []
+    for row in scored.to_dict("records"):
+        probability = float(row["churn_probability"])
+        band = risk_band(probability, low_band_max=low, high_band_min=high)
+        band_counts[band] += 1
+        explanation = explain_customer(pipeline, run.model_type, population, pd.Series(row))
+        new_rows.append(
+            ChurnScore(
+                organization_id=run.organization_id,
+                model_run_id=run.id,
+                customer_id=row["customer_id"],
+                churn_probability=probability,
+                risk_band=band,
+                explanation=explanation,
+                cutoff_date=cutoff,
+                created_by_user_id=run.created_by_user_id,
+            )
+        )
+    db.add_all(new_rows)
+    db.commit()
+
+    return {
+        "model_run_id": str(run.id),
+        "model_type": run.model_type,
+        "model_version": str(run.id),  # CHURN-17: artifact identity = run identity
+        "dataset_version_id": str(run.dataset_version_id),
+        "scoring_run_id": scoring_run_id,
+        "feature_version": FEATURE_VERSION,
+        "scoring_cutoff": cutoff,
+        "scored": len(new_rows),
+        "band_counts": band_counts,
+        "risk_bands": {"low_band_max": low, "high_band_min": high, "source": "configuration"},
+        "features_used": list(FEATURE_COLUMNS),
+        "observation_window_days": run.observation_window_days,
+    }
+
+
+def list_scores(
+    db: Session,
+    org_id: uuid.UUID,
+    model_run_id: uuid.UUID,
+    *,
+    risk_band: str | None = None,
+    page: int = 1,
+    page_size: int = 25,
+) -> tuple[list[ChurnScore], int]:
+    """Stored scores for one model run, newest first (CHURN-13/17)."""
+    query = select(ChurnScore).where(
+        ChurnScore.organization_id == org_id,
+        ChurnScore.model_run_id == model_run_id,
+    )
+    if risk_band is not None:
+        query = query.where(ChurnScore.risk_band == risk_band)
+    query = query.order_by(ChurnScore.churn_probability.desc(), ChurnScore.customer_id)
+    rows = list(db.scalars(query).all())
+    total = len(rows)
+    return rows[(page - 1) * page_size : page * page_size], total
+
+
+def get_customer_score(
+    db: Session,
+    org_id: uuid.UUID,
+    *,
+    model_run_id: uuid.UUID,
+    customer_id: str,
+) -> dict[str, Any]:
+    """Customer-level score + explanation view (CHURN-16)."""
+    score = db.scalar(
+        select(ChurnScore).where(
+            ChurnScore.organization_id == org_id,
+            ChurnScore.model_run_id == model_run_id,
+            ChurnScore.customer_id == customer_id,
+        )
+    )
+    if score is None:
+        raise APIError("Score not found for this customer and model run.", 404, code="NOT_FOUND")
+    return {
+        "customer_id": score.customer_id,
+        "model_run_id": str(score.model_run_id),
+        "churn_probability": score.churn_probability,
+        "risk_band": score.risk_band,
+        "cutoff_date": score.cutoff_date,
+        "explanation": score.explanation or {},
+        "traceability": {
+            "model_run_id": str(score.model_run_id),
+            "note": "Every score references an immutable model run and its versioned artifact.",
+        },
+    }

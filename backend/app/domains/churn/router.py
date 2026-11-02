@@ -1,10 +1,13 @@
-"""Churn labeling API (CHURN-01..04).
+"""Churn labeling and scoring API (CHURN-01..04, CHURN-13..17).
 
 Endpoints:
   POST /api/v1/churn/labels        — generate + persist labels for a version
   GET  /api/v1/churn/labels        — list stored labels (paginated)
   GET  /api/v1/churn/distribution  — stored class distribution report
   GET  /api/v1/churn/schema        — label schema documentation
+  POST /api/v1/churn/scores        — batch-score eligible customers from a model run
+  GET  /api/v1/churn/scores        — list scores for a model run (paginated)
+  GET  /api/v1/churn/scores/{customer_id} — one customer's score + explanation
 """
 
 from __future__ import annotations
@@ -13,7 +16,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -34,6 +37,21 @@ class LabelRequest(BaseModel):
     cutoff_date: str
     observation_window_days: int = 180
     label_horizon_days: int = 90
+
+
+class ScoreRequest(BaseModel):
+    """CHURN-13/14: score from a succeeded model run; bands configurable."""
+
+    model_run_id: uuid.UUID
+    low_band_max: float | None = None  # defaults from Settings (CHURN-14)
+    high_band_min: float | None = None
+
+    @field_validator("low_band_max", "high_band_min")
+    @classmethod
+    def _finite(cls, value: float | None) -> float | None:
+        if value is not None and not 0.0 <= value <= 1.0:
+            raise ValueError("Risk band thresholds must be between 0 and 1.")
+        return value
 
 
 def _label_schema(row: Any) -> dict[str, Any]:
@@ -128,3 +146,90 @@ def distribution_endpoint(
 def schema_endpoint() -> dict[str, Any]:
     """Documented churn label schema."""
     return {"schema": churn_service.label_schema()}
+
+
+# --- scoring endpoints (CHURN-13..17) -----------------------------------------
+
+
+@router.post("/scores", status_code=202)
+def create_scores_endpoint(
+    *,
+    db: Session = Depends(get_db),
+    membership: Membership = Depends(_LABEL_ROLES),
+    request: ScoreRequest,
+) -> dict[str, Any]:
+    """Queue batch scoring from a succeeded model run (CHURN-13).
+
+    Risk band thresholds default to configuration; explicit values are
+    validated and recorded with the scoring run (CHURN-14).
+    """
+    job = churn_service.create_score_run(
+        db,
+        org_id=membership.organization_id,
+        user_id=membership.user_id,
+        model_run_id=request.model_run_id,
+        low_band_max=request.low_band_max,
+        high_band_min=request.high_band_min,
+    )
+    return {
+        "job": {
+            "id": str(job.id),
+            "job_type": job.job_type,
+            "status": job.status,
+            "payload": job.payload,
+        }
+    }
+
+
+@router.get("/scores")
+def list_scores_endpoint(
+    *,
+    db: Session = Depends(get_db),
+    membership: Membership = Depends(_LABEL_ROLES),
+    model_run_id: uuid.UUID,
+    risk_band: str | None = Query(None, pattern="^(low|medium|high)$"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=200),
+) -> dict[str, Any]:
+    """List stored scores for a model run (CHURN-13/17: traceable)."""
+    items, total = churn_service.list_scores(
+        db,
+        membership.organization_id,
+        model_run_id,
+        risk_band=risk_band,
+        page=page,
+        page_size=page_size,
+    )
+    return {
+        "items": [
+            {
+                "customer_id": row.customer_id,
+                "churn_probability": row.churn_probability,
+                "risk_band": row.risk_band,
+                "cutoff_date": row.cutoff_date,
+                "model_run_id": str(row.model_run_id),
+            }
+            for row in items
+        ],
+        "page": page,
+        "page_size": page_size,
+        "pages": (total + page_size - 1) // page_size if total else 0,
+        "total": total,
+    }
+
+
+@router.get("/scores/{customer_id}")
+def customer_score_endpoint(
+    customer_id: str,
+    *,
+    db: Session = Depends(get_db),
+    membership: Membership = Depends(_LABEL_ROLES),
+    model_run_id: uuid.UUID,
+) -> dict[str, Any]:
+    """One customer's score with association-based explanations (CHURN-16)."""
+    return churn_service.get_customer_score(
+        db,
+        membership.organization_id,
+        model_run_id=model_run_id,
+        customer_id=customer_id,
+    )

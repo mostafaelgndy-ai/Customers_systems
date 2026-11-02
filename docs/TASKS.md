@@ -102,7 +102,7 @@ target user confirms the workflow and data availability.
 -   [x] **ENG-07 (P0):** Define logging and request/job correlation IDs.
     -   Acceptance: a request and its background job can be traced
         without logging customer PII.
--   [~] **ENG-08 (P1):** Add CI pipeline for tests, linting, type
+-   [x] **ENG-08 (P1):** Add CI pipeline for tests, linting, type
     checks, and build.
     -   Acceptance: pull requests fail on required check failures.
 
@@ -264,23 +264,23 @@ post-cutoff information.
 
 ### 4.3 Scoring and explanations
 
--   [ ] **CHURN-13 (P0):** Implement batch scoring for eligible active
+-   [x] **CHURN-13 (P0):** Implement batch scoring for eligible active
     customers.
     -   Acceptance: one prediction per eligible customer per run;
         results are traceable.
--   [ ] **CHURN-14 (P0):** Implement configurable risk bands.
+-   [x] **CHURN-14 (P0):** Implement configurable risk bands.
     -   Initial display defaults: Low \< 0.30, Medium 0.30--0.69, High
         \>= 0.70.
     -   Acceptance: thresholds are configuration, not hardcoded business
         truth.
--   [ ] **CHURN-15 (P1):** Implement global feature importance or
+-   [x] **CHURN-15 (P1):** Implement global feature importance or
     equivalent model interpretation.
     -   Acceptance: explanation method is appropriate for the selected
         model and clearly labeled as association, not causation.
--   [ ] **CHURN-16 (P1):** Implement customer-level explanation view.
+-   [x] **CHURN-16 (P1):** Implement customer-level explanation view.
     -   Acceptance: top contributing signals are shown with limitations
         and no causal wording.
--   [ ] **CHURN-17 (P0):** Add model/run registry records.
+-   [x] **CHURN-17 (P0):** Add model/run registry records.
     -   Acceptance: every prediction references an immutable analysis
         run and model version.
 
