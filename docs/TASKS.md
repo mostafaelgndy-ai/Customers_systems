@@ -291,43 +291,43 @@ pass, and batch scoring is reproducible.
 
 ## Phase 5 --- Customer Segmentation Pipeline
 
--   [ ] **SEG-01 (P0):** Select segmentation feature set and document
+-   [x] **SEG-01 (P0):** Select segmentation feature set and document
     rationale.
     -   Acceptance: features are appropriate for the pilot merchant and
         exclude identifiers.
--   [ ] **SEG-02 (P0):** Implement missing-value handling and feature
+-   [x] **SEG-02 (P0):** Implement missing-value handling and feature
     transformations.
     -   Acceptance: fitted preprocessing is persisted with the
         clustering model.
--   [ ] **SEG-03 (P0):** Implement scaling for distance-based
+-   [x] **SEG-03 (P0):** Implement scaling for distance-based
     clustering.
     -   Acceptance: scaling is fit on the relevant training population
         and reused consistently.
--   [ ] **SEG-04 (P0):** Implement K-Means pipeline.
+-   [x] **SEG-04 (P0):** Implement K-Means pipeline.
     -   Acceptance: random seed, initialization, and cluster count are
         recorded.
--   [ ] **SEG-05 (P0):** Compare a bounded set of candidate cluster
+-   [x] **SEG-05 (P0):** Compare a bounded set of candidate cluster
     counts.
     -   Acceptance: report includes cluster sizes and silhouette score
         where valid.
--   [ ] **SEG-06 (P0):** Add safeguards for tiny, empty, or degenerate
+-   [x] **SEG-06 (P0):** Add safeguards for tiny, empty, or degenerate
     clusters.
     -   Acceptance: run emits warnings and does not silently present
         unusable clusters as reliable.
--   [ ] **SEG-07 (P0):** Generate segment profiles.
+-   [x] **SEG-07 (P0):** Generate segment profiles.
     -   Acceptance: each segment has counts, medians/means, and
         distributions for key features.
--   [ ] **SEG-08 (P0):** Generate descriptive labels from profile
+-   [x] **SEG-08 (P0):** Generate descriptive labels from profile
     statistics.
     -   Acceptance: labels are editable and are not based on arbitrary
         cluster IDs.
--   [ ] **SEG-09 (P0):** Persist assignments, profiles, parameters, and
+-   [x] **SEG-09 (P0):** Persist assignments, profiles, parameters, and
     preprocessing artifact.
     -   Acceptance: each assignment references a segmentation run.
--   [ ] **SEG-10 (P1):** Add segment comparison/stability report across
+-   [x] **SEG-10 (P1):** Add segment comparison/stability report across
     runs.
     -   Acceptance: differences are presented with appropriate caveats.
--   [ ] **SEG-11 (P2):** Evaluate DBSCAN or alternative clustering
+-   [x] **SEG-11 (P2):** Evaluate DBSCAN or alternative clustering
     methods.
     -   Acceptance: alternative is retained only if it improves
         interpretability or operational usefulness.

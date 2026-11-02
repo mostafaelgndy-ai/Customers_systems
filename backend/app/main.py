@@ -22,6 +22,7 @@ from app.domains.datasets.router import router as datasets_router
 from app.domains.features.router import router as features_router
 from app.domains.identity.router import router as identity_router
 from app.domains.jobs.router import router as jobs_router
+from app.domains.segmentation.router import router as segmentation_router
 
 configure_logging(settings.log_level)
 logger = logging.getLogger("api")
@@ -33,6 +34,7 @@ def _include_routers(app: FastAPI) -> None:
     app.include_router(datasets_router, prefix=prefix)
     app.include_router(features_router, prefix=prefix)
     app.include_router(churn_router, prefix=prefix)
+    app.include_router(segmentation_router, prefix=prefix)
     app.include_router(jobs_router, prefix=prefix)
 
 
@@ -69,10 +71,12 @@ async def _lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     from app.domains.churn import jobs as churn_jobs
     from app.domains.datasets import jobs as dataset_jobs
     from app.domains.features import jobs as feature_jobs
+    from app.domains.segmentation import jobs as segmentation_jobs
 
     dataset_jobs.register()  # ensure handlers registered in every entrypoint
     feature_jobs.register()  # ensure feature job handlers registered
-    churn_jobs.register()  # ensure churn training handler registered
+    churn_jobs.register()  # ensure churn training/scoring handlers registered
+    segmentation_jobs.register()  # ensure segmentation handler registered
     logger.info("startup completed")
     yield
     logger.info("shutdown completed")
