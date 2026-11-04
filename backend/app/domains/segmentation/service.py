@@ -269,6 +269,22 @@ def get_segmentation_run(db: Session, org_id: uuid.UUID, run_id: uuid.UUID) -> S
     return run
 
 
+def list_segmentation_runs(
+    db: Session,
+    org_id: uuid.UUID,
+    *,
+    status: str | None = None,
+    dataset_version_id: uuid.UUID | None = None,
+) -> list[SegmentationRun]:
+    """Org-scoped segmentation runs (API-06/UI-11), newest first."""
+    query = select(SegmentationRun).where(SegmentationRun.organization_id == org_id)
+    if status is not None:
+        query = query.where(SegmentationRun.status == status)
+    if dataset_version_id is not None:
+        query = query.where(SegmentationRun.dataset_version_id == dataset_version_id)
+    return list(db.scalars(query.order_by(SegmentationRun.created_at.desc())).all())
+
+
 def list_assignments(
     db: Session,
     org_id: uuid.UUID,

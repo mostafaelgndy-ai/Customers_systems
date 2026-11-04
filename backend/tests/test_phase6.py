@@ -77,6 +77,28 @@ def test_churn_model_run_api_lifecycle(client, org_a_owner, org_b_owner, trained
     assert probs_desc == sorted(probs_desc, reverse=True)
 
 
+# --- API-06: segmentation runs list (UI overview) ---------------------------------
+
+
+def test_segmentation_runs_list(client, org_a_owner, org_b_owner) -> None:
+    headers = org_a_owner["headers"]
+    dataset_id, version_id = _prepare(client, org_a_owner)
+    client.post(
+        "/api/v1/segmentation/runs",
+        json={"dataset_version_id": version_id, "k_candidates": [3]},
+        headers=headers,
+    )
+    listing = client.get("/api/v1/segmentation/runs", headers=headers)
+    assert listing.status_code == 200
+    body = listing.json()
+    assert body["total"] == 1
+    assert body["items"][0]["id"]
+    assert body["items"][0]["status"] == "succeeded"
+    filtered = client.get(f"/api/v1/segmentation/runs?dataset_version_id={version_id}", headers=headers)
+    assert filtered.json()["total"] == 1
+    assert client.get("/api/v1/segmentation/runs", headers=org_b_owner["headers"]).json()["total"] == 0
+
+
 # --- API-11: jobs list endpoint ------------------------------------------------
 
 

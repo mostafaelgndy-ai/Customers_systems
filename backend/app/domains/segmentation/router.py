@@ -48,6 +48,34 @@ class SegmentRenameRequest(BaseModel):
     segment_label: str
 
 
+@router.get("/runs")
+def list_runs_endpoint(
+    *,
+    db: Session = Depends(get_db),
+    membership: Membership = Depends(_ROLES),
+    status: str | None = Query(None, pattern="^(queued|running|succeeded|failed)$"),
+    dataset_version_id: uuid.UUID | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=200),
+) -> dict[str, Any]:
+    """List segmentation runs (API-06/UI-11), newest first."""
+    runs = segmentation_service.list_segmentation_runs(
+        db,
+        membership.organization_id,
+        status=status,
+        dataset_version_id=dataset_version_id,
+    )
+    total = len(runs)
+    items = runs[(page - 1) * page_size : page * page_size]
+    return {
+        "items": [_run_schema(run)["run"] for run in items],
+        "page": page,
+        "page_size": page_size,
+        "pages": (total + page_size - 1) // page_size if total else 0,
+        "total": total,
+    }
+
+
 @router.post("/runs", status_code=202)
 def create_run_endpoint(
     *,

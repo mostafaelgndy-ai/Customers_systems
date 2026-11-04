@@ -20,6 +20,7 @@ next-env.d.ts
 .next/
 out/
 .turbo/
+*.tsbuildinfo
 
 # --- Local data / secrets ---
 .env
