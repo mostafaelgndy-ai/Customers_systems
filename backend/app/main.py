@@ -17,8 +17,11 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestLoggingMiddleware
 from app.db.session import engine
+from app.domains.audit.router import router as audit_router
 from app.domains.churn.router import router as churn_router
+from app.domains.customers.router import router as customers_router
 from app.domains.datasets.router import router as datasets_router
+from app.domains.exports.router import router as exports_router
 from app.domains.features.router import router as features_router
 from app.domains.identity.router import router as identity_router
 from app.domains.jobs.router import router as jobs_router
@@ -34,7 +37,10 @@ def _include_routers(app: FastAPI) -> None:
     app.include_router(datasets_router, prefix=prefix)
     app.include_router(features_router, prefix=prefix)
     app.include_router(churn_router, prefix=prefix)
+    app.include_router(customers_router, prefix=prefix)
     app.include_router(segmentation_router, prefix=prefix)
+    app.include_router(exports_router, prefix=prefix)
+    app.include_router(audit_router, prefix=prefix)
     app.include_router(jobs_router, prefix=prefix)
 
 
@@ -70,6 +76,7 @@ def _health_router(app: FastAPI) -> None:
 async def _lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     from app.domains.churn import jobs as churn_jobs
     from app.domains.datasets import jobs as dataset_jobs
+    from app.domains.exports import jobs as export_jobs
     from app.domains.features import jobs as feature_jobs
     from app.domains.segmentation import jobs as segmentation_jobs
 
@@ -77,6 +84,7 @@ async def _lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     feature_jobs.register()  # ensure feature job handlers registered
     churn_jobs.register()  # ensure churn training/scoring handlers registered
     segmentation_jobs.register()  # ensure segmentation handler registered
+    export_jobs.register()  # ensure export_csv handler registered
     logger.info("startup completed")
     yield
     logger.info("shutdown completed")
@@ -95,6 +103,10 @@ def create_app() -> FastAPI:
 
     _health_router(app)
     app.add_middleware(RequestLoggingMiddleware)
+    if settings.rate_limit_enabled:
+        from app.core.rate_limit import RateLimitMiddleware
+
+        app.add_middleware(RateLimitMiddleware)  # type: ignore[arg-type]
     _include_routers(app)
     register_exception_handlers(app)
     return app

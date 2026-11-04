@@ -105,6 +105,20 @@ def create_segmentation_run(
         created_by_user_id=user_id,
         payload={"run_id": str(run.id)},
     )
+    from app.domains.audit.service import record_audit  # SEC-06: sensitive action
+
+    record_audit(
+        db,
+        org_id=org_id,
+        user_id=user_id,
+        action="segmentation.run_requested",
+        resource_type="segmentation_run",
+        resource_id=run.id,
+        details={
+            "dataset_version_id": str(dataset_version_id),
+            "k_candidates": config_params.get("k_candidates"),
+        },
+    )
     db.commit()
     return run
 
@@ -122,30 +136,30 @@ def execute_segmentation_run(db: Session, *, run_id: uuid.UUID) -> dict[str, Any
     db.commit()
 
     params = run.params or {}
-    version = get_scoped_version_by_id(db, run.organization_id, run.dataset_version_id)
-    customers_df, orders_df = load_version_frames(db, version)
-
-    k_candidates = params.get("k_candidates")
-    config = SegmentationConfig(
-        observation_window_days=run.observation_window_days,
-        k_candidates=tuple(k_candidates) if k_candidates else config_default_candidates(),
-        random_seed=run.random_seed,
-        min_cluster_size=int(params.get("min_cluster_size", 5)),
-    )
-
     try:
+        version = get_scoped_version_by_id(db, run.organization_id, run.dataset_version_id)
+        customers_df, orders_df = load_version_frames(db, version)
+
+        k_candidates = params.get("k_candidates")
+        config = SegmentationConfig(
+            observation_window_days=run.observation_window_days,
+            k_candidates=tuple(k_candidates) if k_candidates else config_default_candidates(),
+            random_seed=run.random_seed,
+            min_cluster_size=int(params.get("min_cluster_size", 5)),
+        )
         result = run_segmentation(customers_df, orders_df, config)
-    except ValueError as exc:
+        artifacts = save_segmentation_artifacts(
+            result, Path(settings.models_dir) / "segmentation" / str(run.organization_id) / str(run.id)
+        )
+        profiles, labels = build_profiles(result)
+    except Exception as exc:  # noqa: BLE001 - run must never stay stuck 'running'
+        # JOB-09: a failed segmentation run records its failure explicitly
+        # and never leaves partial profiles/assignments behind.
         run.status = SEGMENTATION_RUN_FAILED
         run.error = str(exc)[:500]
         db.commit()
-        raise APIError(f"Segmentation failed: {exc}", 409, code="SEGMENTATION_FAILED") from exc
+        raise APIError(f"Segmentation failed: {str(exc)[:300]}", 409, code="SEGMENTATION_FAILED") from exc
 
-    artifacts = save_segmentation_artifacts(
-        result, Path(settings.models_dir) / "segmentation" / str(run.organization_id) / str(run.id)
-    )
-
-    profiles, labels = build_profiles(result)
     run.cutoff_date = result.population.cutoff_date
     run.selected_k = result.selected_k
     run.params = {

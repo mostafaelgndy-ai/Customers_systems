@@ -54,6 +54,17 @@ class ScoreRequest(BaseModel):
         return value
 
 
+class TrainingRequest(BaseModel):
+    """Churn training run request (CHURN-05..12; API-06)."""
+
+    dataset_version_id: uuid.UUID
+    model_type: str = "auto"  # auto | logistic_regression | random_forest
+    observation_window_days: int = 180
+    label_horizon_days: int = 90
+    random_seed: int = 42
+    min_period_customers: int = 30
+
+
 def _label_schema(row: Any) -> dict[str, Any]:
     return {
         "customer_id": row.customer_id,
@@ -148,6 +159,85 @@ def schema_endpoint() -> dict[str, Any]:
     return {"schema": churn_service.label_schema()}
 
 
+# --- model run registry + training API (CHURN-17, API-06) ---------------------
+
+
+def _run_schema(run: Any) -> dict[str, Any]:
+    return {
+        "id": str(run.id),
+        "dataset_version_id": str(run.dataset_version_id),
+        "model_type": run.model_type,
+        "status": run.status,
+        "observation_window_days": run.observation_window_days,
+        "label_horizon_days": run.label_horizon_days,
+        "train_cutoff_date": run.train_cutoff_date,
+        "metrics": run.metrics,
+        "error": run.error,
+    }
+
+
+@router.post("/model-runs", status_code=202)
+def create_model_run_endpoint(
+    *,
+    db: Session = Depends(get_db),
+    membership: Membership = Depends(_LABEL_ROLES),
+    request: TrainingRequest,
+) -> dict[str, Any]:
+    """Queue a churn training run (CHURN-05..12; API-06 analysis runs)."""
+    run = churn_service.create_model_run(
+        db,
+        org_id=membership.organization_id,
+        user_id=membership.user_id,
+        dataset_version_id=request.dataset_version_id,
+        model_type=request.model_type,
+        observation_window_days=request.observation_window_days,
+        label_horizon_days=request.label_horizon_days,
+        random_seed=request.random_seed,
+        min_period_customers=request.min_period_customers,
+    )
+    return {"run": _run_schema(run)}
+
+
+@router.get("/model-runs")
+def list_model_runs_endpoint(
+    *,
+    db: Session = Depends(get_db),
+    membership: Membership = Depends(_LABEL_ROLES),
+    dataset_version_id: uuid.UUID | None = Query(None),
+    status: str | None = Query(None, pattern="^(queued|running|succeeded|failed)$"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=200),
+) -> dict[str, Any]:
+    """List training runs (CHURN-17 registry), newest first."""
+    runs = churn_service.list_model_runs(
+        db,
+        membership.organization_id,
+        dataset_version_id=dataset_version_id,
+        status=status,
+    )
+    total = len(runs)
+    items = runs[(page - 1) * page_size : page * page_size]
+    return {
+        "items": [_run_schema(run) for run in items],
+        "page": page,
+        "page_size": page_size,
+        "pages": (total + page_size - 1) // page_size if total else 0,
+        "total": total,
+    }
+
+
+@router.get("/model-runs/{run_id}")
+def get_model_run_endpoint(
+    run_id: uuid.UUID,
+    *,
+    db: Session = Depends(get_db),
+    membership: Membership = Depends(_LABEL_ROLES),
+) -> dict[str, Any]:
+    """One training run's status, metrics, and traceability (CHURN-17)."""
+    run = churn_service.get_model_run(db, membership.organization_id, run_id)
+    return {"run": _run_schema(run)}
+
+
 # --- scoring endpoints (CHURN-13..17) -----------------------------------------
 
 
@@ -188,6 +278,7 @@ def list_scores_endpoint(
     membership: Membership = Depends(_LABEL_ROLES),
     model_run_id: uuid.UUID,
     risk_band: str | None = Query(None, pattern="^(low|medium|high)$"),
+    order: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=200),
 ) -> dict[str, Any]:
@@ -197,6 +288,7 @@ def list_scores_endpoint(
         membership.organization_id,
         model_run_id,
         risk_band=risk_band,
+        order=order,
         page=page,
         page_size=page_size,
     )

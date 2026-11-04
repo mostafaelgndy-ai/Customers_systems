@@ -14,6 +14,17 @@ def dispatch_job(self, job_id: str) -> dict:  # type: ignore[no-untyped-def]
     Retries are safe (JOB-08): handlers skip finished versions and the
     runner only executes a handler for jobs re-claimed from the queue.
     """
+    # The Celery process does not run the API lifespan, so handler
+    # registration is done explicitly here (JOB-01).
+    from app.domains.churn import jobs as churn_jobs
+    from app.domains.datasets import jobs as dataset_jobs
+    from app.domains.exports import jobs as export_jobs
+    from app.domains.features import jobs as feature_jobs
+    from app.domains.segmentation import jobs as segmentation_jobs
+
+    for module in (dataset_jobs, feature_jobs, churn_jobs, segmentation_jobs, export_jobs):
+        module.register()
+
     from app.domains.jobs.queue import run_job_by_id
 
     try:

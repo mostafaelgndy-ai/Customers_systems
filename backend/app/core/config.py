@@ -42,6 +42,16 @@ class Settings(BaseSettings):
     # --- trained model artifacts (CHURN-12) ---
     models_dir: Path = Path("data/models")
 
+    # --- CSV exports (API-10/JOB-06) ---
+    exports_dir: Path = Path("data/exports")
+
+    # --- rate limiting (SEC-04): disabled by default; limits are config ---
+    rate_limit_enabled: bool = False
+    rate_limit_auth_per_minute: int = 30
+    rate_limit_uploads_per_minute: int = 10
+    rate_limit_expensive_per_minute: int = 10
+    rate_limit_default_per_minute: int = 60
+
     # --- risk bands (CHURN-14): configuration, not hardcoded business truth ---
     risk_band_low_max: float = 0.30  # probability < low_max  → "low"
     risk_band_high_min: float = 0.70  # probability >= high_min → "high"

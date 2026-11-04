@@ -306,6 +306,17 @@ def create_model_run(
         created_by_user_id=user_id,
         payload={"run_id": str(run.id), "dataset_version_id": str(dataset_version_id)},
     )
+    from app.domains.audit.service import record_audit  # SEC-06: sensitive action
+
+    record_audit(
+        db,
+        org_id=org_id,
+        user_id=user_id,
+        action="churn.run_requested",
+        resource_type="churn_model_run",
+        resource_id=run.id,
+        details={"model_type": run.model_type, "dataset_version_id": str(dataset_version_id)},
+    )
     db.commit()
     return run
 
@@ -330,26 +341,31 @@ def execute_model_run(db: Session, *, run_id: uuid.UUID) -> dict[str, Any]:
     try:
         version = get_scoped_version_by_id(db, run.organization_id, run.dataset_version_id)
         customers_df, orders_df = load_version_frames(db, version)
-    except APIError:
-        raise
-    params = ((run.metrics or {}).get("params", {})) if run.metrics else {}
+        params = ((run.metrics or {}).get("params", {})) if run.metrics else {}
 
-    config = TrainingConfig(
-        observation_window_days=run.observation_window_days,
-        label_horizon_days=run.label_horizon_days,
-        random_seed=params.get("random_seed", 42),
-        min_period_customers=params.get("min_period_customers", 30),
-        override_selection=run.model_type if run.model_type != "auto" else None,
-    )
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        result = train_churn_models(
-            customers_df,
-            orders_df,
-            config,
-            dataset_version_id=str(run.dataset_version_id),
+        config = TrainingConfig(
+            observation_window_days=run.observation_window_days,
+            label_horizon_days=run.label_horizon_days,
+            random_seed=params.get("random_seed", 42),
+            min_period_customers=params.get("min_period_customers", 30),
+            override_selection=run.model_type if run.model_type != "auto" else None,
         )
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            result = train_churn_models(
+                customers_df,
+                orders_df,
+                config,
+                dataset_version_id=str(run.dataset_version_id),
+            )
+    except Exception as exc:  # noqa: BLE001 - run must never stay stuck 'running'
+        # JOB-09: a failed training run records its failure explicitly and
+        # never touches a previously persisted artifact/score state.
+        run.status = MODEL_RUN_FAILED
+        run.error = str(exc)[:500]
+        db.commit()
+        raise APIError(f"Training failed: {str(exc)[:300]}", 409, code="TRAINING_FAILED") from exc
 
     artifact_dir = Path(settings.models_dir) / str(run.organization_id) / str(run.id)
     paths = save_artifacts(result, artifact_dir)
@@ -373,6 +389,22 @@ def execute_model_run(db: Session, *, run_id: uuid.UUID) -> dict[str, Any]:
         "artifact_files": paths,
         "warnings": result.metadata["warnings"],
     }
+
+
+def list_model_runs(
+    db: Session,
+    org_id: uuid.UUID,
+    *,
+    dataset_version_id: uuid.UUID | None = None,
+    status: str | None = None,
+) -> list[ChurnModelRun]:
+    """Org-scoped model runs (API-06/CHURN-17 registry), newest first."""
+    query = select(ChurnModelRun).where(ChurnModelRun.organization_id == org_id)
+    if dataset_version_id is not None:
+        query = query.where(ChurnModelRun.dataset_version_id == dataset_version_id)
+    if status is not None:
+        query = query.where(ChurnModelRun.status == status)
+    return list(db.scalars(query.order_by(ChurnModelRun.created_at.desc())).all())
 
 
 def get_model_run(db: Session, org_id: uuid.UUID, run_id: uuid.UUID) -> ChurnModelRun:
@@ -430,6 +462,17 @@ def create_score_run(
             "low_band_max": low,
             "high_band_min": high,
         },
+    )
+    from app.domains.audit.service import record_audit  # SEC-06: sensitive action
+
+    record_audit(
+        db,
+        org_id=org_id,
+        user_id=user_id,
+        action="churn.score_requested",
+        resource_type="job",
+        resource_id=job.id,
+        details={"model_run_id": str(model_run_id), "low_band_max": low, "high_band_min": high},
     )
     db.commit()
     return job
@@ -537,17 +580,21 @@ def list_scores(
     model_run_id: uuid.UUID,
     *,
     risk_band: str | None = None,
+    order: str = "desc",
     page: int = 1,
     page_size: int = 25,
 ) -> tuple[list[ChurnScore], int]:
-    """Stored scores for one model run, newest first (CHURN-13/17)."""
+    """Stored scores for one model run, ordered by probability (API-11)."""
+    if order not in ("asc", "desc"):
+        raise APIError("order must be 'asc' or 'desc'.", 400, code="BAD_REQUEST")
     query = select(ChurnScore).where(
         ChurnScore.organization_id == org_id,
         ChurnScore.model_run_id == model_run_id,
     )
     if risk_band is not None:
         query = query.where(ChurnScore.risk_band == risk_band)
-    query = query.order_by(ChurnScore.churn_probability.desc(), ChurnScore.customer_id)
+    direction = ChurnScore.churn_probability.desc() if order == "desc" else ChurnScore.churn_probability.asc()
+    query = query.order_by(direction, ChurnScore.customer_id)
     rows = list(db.scalars(query).all())
     total = len(rows)
     return rows[(page - 1) * page_size : page * page_size], total

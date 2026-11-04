@@ -341,55 +341,55 @@ their profiles and identify a practical action for each.
 
 ### 6.1 Core API
 
--   [ ] **API-01 (P0):** Implement authentication endpoints.
--   [ ] **API-02 (P0):** Implement organization and membership
+-   [x] **API-01 (P0):** Implement authentication endpoints.
+-   [x] **API-02 (P0):** Implement organization and membership
     authorization.
--   [ ] **API-03 (P0):** Implement dataset upload/list/detail endpoints.
--   [ ] **API-04 (P0):** Implement schema mapping and validation report
+-   [x] **API-03 (P0):** Implement dataset upload/list/detail endpoints.
+-   [x] **API-04 (P0):** Implement schema mapping and validation report
     endpoints.
--   [ ] **API-05 (P0):** Implement analysis-run creation endpoint.
--   [ ] **API-06 (P0):** Implement analysis-run status/progress
+-   [x] **API-05 (P0):** Implement analysis-run creation endpoint.
+-   [x] **API-06 (P0):** Implement analysis-run status/progress
     endpoint.
--   [ ] **API-07 (P0):** Implement churn prediction list/detail/filter
+-   [x] **API-07 (P0):** Implement churn prediction list/detail/filter
     endpoints.
--   [ ] **API-08 (P0):** Implement segmentation run/profile/assignment
+-   [x] **API-08 (P0):** Implement segmentation run/profile/assignment
     endpoints.
--   [ ] **API-09 (P0):** Implement customer detail endpoint scoped to a
+-   [x] **API-09 (P0):** Implement customer detail endpoint scoped to a
     dataset/run.
--   [ ] **API-10 (P0):** Implement CSV export endpoints/jobs.
--   [ ] **API-11 (P0):** Add pagination, filtering, sorting, and bounded
+-   [x] **API-10 (P0):** Implement CSV export endpoints/jobs.
+-   [x] **API-11 (P0):** Add pagination, filtering, sorting, and bounded
     query parameters.
--   [ ] **API-12 (P0):** Add consistent validation and error responses.
+-   [x] **API-12 (P0):** Add consistent validation and error responses.
 
 ### 6.2 Background processing
 
--   [ ] **JOB-01 (P0):** Configure Redis and background worker.
--   [ ] **JOB-02 (P0):** Implement validation job.
--   [ ] **JOB-03 (P0):** Implement feature-generation job.
--   [ ] **JOB-04 (P0):** Implement churn training/scoring job.
--   [ ] **JOB-05 (P0):** Implement segmentation job.
--   [ ] **JOB-06 (P0):** Implement export job.
--   [ ] **JOB-07 (P0):** Persist job state, progress, start/end time,
+-   [x] **JOB-01 (P0):** Configure Redis and background worker.
+-   [x] **JOB-02 (P0):** Implement validation job.
+-   [x] **JOB-03 (P0):** Implement feature-generation job.
+-   [x] **JOB-04 (P0):** Implement churn training/scoring job.
+-   [x] **JOB-05 (P0):** Implement segmentation job.
+-   [x] **JOB-06 (P0):** Implement export job.
+-   [x] **JOB-07 (P0):** Persist job state, progress, start/end time,
     and safe error summary.
--   [ ] **JOB-08 (P0):** Make retries idempotent or protect against
+-   [x] **JOB-08 (P0):** Make retries idempotent or protect against
     duplicate result creation.
--   [ ] **JOB-09 (P0):** Ensure one failed analysis run cannot overwrite
+-   [x] **JOB-09 (P0):** Ensure one failed analysis run cannot overwrite
     a previous successful run.
--   [ ] **JOB-10 (P1):** Add worker concurrency and resource limits.
+-   [x] **JOB-10 (P1):** Add worker concurrency and resource limits.
 
 ### 6.3 API security tests
 
--   [ ] **SEC-01 (P0):** Test tenant isolation on every
+-   [x] **SEC-01 (P0):** Test tenant isolation on every
     organization-scoped endpoint.
--   [ ] **SEC-02 (P0):** Test authorization for dataset upload,
+-   [x] **SEC-02 (P0):** Test authorization for dataset upload,
     analysis, and exports.
--   [ ] **SEC-03 (P0):** Test file size/type validation and malformed
+-   [x] **SEC-03 (P0):** Test file size/type validation and malformed
     CSV handling.
--   [ ] **SEC-04 (P0):** Add rate limits to authentication, upload, and
+-   [x] **SEC-04 (P0):** Add rate limits to authentication, upload, and
     expensive operations.
--   [ ] **SEC-05 (P0):** Ensure logs and error messages do not leak PII
+-   [x] **SEC-05 (P0):** Ensure logs and error messages do not leak PII
     or secrets.
--   [ ] **SEC-06 (P1):** Add audit events for sensitive actions and
+-   [x] **SEC-06 (P1):** Add audit events for sensitive actions and
     exports.
 
 **Exit gate:** API can execute the complete workflow asynchronously and

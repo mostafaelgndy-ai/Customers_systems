@@ -16,6 +16,46 @@ request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id
 job_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("job_id", default="-")
 
 REDACTED_FIELDS = {"password", "hashed_password", "token", "refresh_token", "secret_key"}
+_REDACTED = "***redacted***"
+
+# Standard LogRecord attributes not echoed into the JSON payload.
+_STANDARD_RECORD_ATTRS = frozenset(
+    {
+        "name",
+        "msg",
+        "args",
+        "levelname",
+        "levelno",
+        "pathname",
+        "filename",
+        "module",
+        "exc_info",
+        "exc_text",
+        "stack_info",
+        "lineno",
+        "funcName",
+        "created",
+        "msecs",
+        "relativeCreated",
+        "thread",
+        "threadName",
+        "processName",
+        "process",
+        "taskName",
+        "getMessage",
+        "message",
+        "asctime",
+    }
+)
+
+
+def _redact(value: Any) -> Any:
+    """SEC-05: recursively redact secret-looking keys from structured logs."""
+    if isinstance(value, dict):
+        return {key: (_REDACTED if key in REDACTED_FIELDS else _redact(val)) for key, val in value.items()}
+    if isinstance(value, list):
+        return [_redact(item) for item in value]
+    return value
 
 
 def new_request_id() -> str:
@@ -34,7 +74,11 @@ class JSONFormatter(logging.Formatter):
         }
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
-        return json.dumps(payload, ensure_ascii=False)
+        # SEC-05: extras may carry secrets (e.g. login payloads); redact
+        # recursively before serializing.
+        extra = {k: v for k, v in record.__dict__.items() if k not in _STANDARD_RECORD_ATTRS}
+        payload.update(_redact(extra))
+        return json.dumps(payload, ensure_ascii=False, default=str)
 
 
 def configure_logging(level: str = "INFO") -> None:

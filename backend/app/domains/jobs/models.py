@@ -18,7 +18,19 @@ JOB_FAILED = "failed"
 JOB_CANCELLED = "cancelled"
 
 VALIDATE_DATASET = "validate_dataset"
-JOB_TYPES = (VALIDATE_DATASET,)
+COMPUTE_FEATURES = "compute_features"
+TRAIN_CHURN_MODEL = "train_churn_model"
+SCORE_CHURN_MODEL = "score_churn_model"
+RUN_SEGMENTATION = "run_segmentation"
+EXPORT_CSV = "export_csv"
+JOB_TYPES = (
+    VALIDATE_DATASET,
+    COMPUTE_FEATURES,
+    TRAIN_CHURN_MODEL,
+    SCORE_CHURN_MODEL,
+    RUN_SEGMENTATION,
+    EXPORT_CSV,
+)
 
 
 class Job(Base, TimestampMixin):
