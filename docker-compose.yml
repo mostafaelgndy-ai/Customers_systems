@@ -40,8 +40,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       INLINE_JOBS: "false"          # dev stack runs jobs on the Celery worker
       UPLOAD_DIR: /data/uploads
+      EXPORTS_DIR: /data/exports
     volumes:
       - uploads:/data/uploads
+      - exports:/data/exports
     ports:
       - "8000:8000"
     depends_on:
@@ -61,8 +63,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       INLINE_JOBS: "false"
       UPLOAD_DIR: /data/uploads
+      EXPORTS_DIR: /data/exports
     volumes:
       - uploads:/data/uploads
+      - exports:/data/exports
     depends_on:
       db:
         condition: service_healthy
@@ -83,3 +87,4 @@ services:
 volumes:
   pgdata:
   uploads:
+  exports:

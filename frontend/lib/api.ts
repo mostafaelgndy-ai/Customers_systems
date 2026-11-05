@@ -26,11 +26,13 @@ export function loadTokens(): Tokens {
 
 export function saveTokens(tokens: Tokens) {
   window.localStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
+  invalidateMeCache();
 }
 
 export function clearTokens() {
   window.localStorage.removeItem(TOKEN_KEY);
-  window.localStorage.removeItem(ORG_KEY);
+  clearActiveOrg();
+  invalidateMeCache();
 }
 
 export function loadActiveOrg(): string {
@@ -40,6 +42,11 @@ export function loadActiveOrg(): string {
 
 export function saveActiveOrg(orgId: string) {
   window.localStorage.setItem(ORG_KEY, orgId);
+  meCache = null;
+}
+
+export function clearActiveOrg() {
+  window.localStorage.removeItem(ORG_KEY);
 }
 
 export class ApiError extends Error {
@@ -148,6 +155,39 @@ export type Me = {
   organizations: Org[];
 };
 
+// --- /auth/me cache (UI-01/L4) ----------------------------------------------
+// Nav + every page's auth guard request /auth/me; a short TTL cache avoids
+// the duplicate call on each navigation. Invalidated on token/org changes.
+
+const ME_TTL_MS = 30_000;
+let meCache: { data: Me; expires: number } | null = null;
+
+export function invalidateMeCache() {
+  meCache = null;
+}
+
 export async function me(): Promise<Me> {
-  return api.get<Me>("/api/v1/auth/me");
+  if (meCache && Date.now() < meCache.expires) return meCache.data;
+  const data = await api.get<Me>("/api/v1/auth/me");
+  meCache = { data, expires: Date.now() + ME_TTL_MS };
+  return data;
+}
+
+// --- stale-org recovery (M2) -------------------------------------------------
+// A stale/absent active-organization id makes every tenant-scoped call fail
+// with 403 PERMISSION_DENIED (e.g. after a DB reset with reused browser
+// storage). Re-select the user's first organization, then let the caller
+// retry once. Returns false when recovery is impossible (no orgs / no token).
+
+export async function recoverActiveOrg(): Promise<boolean> {
+  try {
+    const profile = await me();
+    const firstOrg = profile.organizations[0];
+    if (!firstOrg) return false;
+    if (loadActiveOrg() === firstOrg.id) return false; // already the best guess
+    saveActiveOrg(firstOrg.id);
+    return true;
+  } catch {
+    return false;
+  }
 }

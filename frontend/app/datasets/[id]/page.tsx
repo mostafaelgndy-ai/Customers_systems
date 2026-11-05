@@ -625,7 +625,7 @@ export default function DatasetPage() {
                       {Object.entries(metrics).map(([key, value]) => (
                         <div key={key} style={{ display: "contents" }}>
                           <dt>{key.replace(/_/g, " ")}</dt>
-                          <dd>{String(value)}</dd>
+                          <dd>{summaryValue(value)}</dd>
                         </div>
                       ))}
                     </dl>
@@ -639,6 +639,18 @@ export default function DatasetPage() {
       )}
     </>
   );
+}
+
+// Report summary values can be flat (rows: 5) or nested dicts
+// (status_counts: {completed: 792, ...}) — render nested ones as
+// "key1: v1 · key2: v2" instead of the literal "[object Object]".
+function summaryValue(value: unknown): string {
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return "—";
+    return entries.map(([k, v]) => `${k}: ${String(v)}`).join(" · ");
+  }
+  return String(value);
 }
 
 /** UI-06: analysis configuration for a validated version (churn training

@@ -423,6 +423,11 @@ table.data tr:last-child td {
   margin: 0.35rem 0;
 }
 
+/* Rows with an extra action (e.g. segment rename button) */
+.bar-wrap-4 {
+  grid-template-columns: minmax(9rem, 13rem) 1fr 9rem auto;
+}
+
 .bar-track {
   background: #f1f5f9;
   border-radius: 6px;

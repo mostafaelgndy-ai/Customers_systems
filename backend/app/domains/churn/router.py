@@ -17,10 +17,12 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, field_validator
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.domains.churn import service as churn_service
+from app.domains.datasets.models import DatasetVersion
 from app.domains.identity.deps import role_checker
 from app.domains.identity.models import Membership
 
@@ -162,10 +164,19 @@ def schema_endpoint() -> dict[str, Any]:
 # --- model run registry + training API (CHURN-17, API-06) ---------------------
 
 
-def _run_schema(run: Any) -> dict[str, Any]:
+def _run_schema(db: Session, run: Any) -> dict[str, Any]:
+    # Human-friendly version label (L3 bug fix): the run's dataset version
+    # number, org-scoped so cross-tenant ids can never leak a label.
+    version_number = db.scalar(
+        select(DatasetVersion.version_number).where(
+            DatasetVersion.id == run.dataset_version_id,
+            DatasetVersion.organization_id == run.organization_id,
+        )
+    )
     return {
         "id": str(run.id),
         "dataset_version_id": str(run.dataset_version_id),
+        "version_number": version_number,
         "model_type": run.model_type,
         "status": run.status,
         "observation_window_days": run.observation_window_days,
@@ -195,7 +206,7 @@ def create_model_run_endpoint(
         random_seed=request.random_seed,
         min_period_customers=request.min_period_customers,
     )
-    return {"run": _run_schema(run)}
+    return {"run": _run_schema(db, run)}
 
 
 @router.get("/model-runs")
@@ -218,7 +229,7 @@ def list_model_runs_endpoint(
     total = len(runs)
     items = runs[(page - 1) * page_size : page * page_size]
     return {
-        "items": [_run_schema(run) for run in items],
+        "items": [_run_schema(db, run) for run in items],
         "page": page,
         "page_size": page_size,
         "pages": (total + page_size - 1) // page_size if total else 0,
@@ -235,7 +246,7 @@ def get_model_run_endpoint(
 ) -> dict[str, Any]:
     """One training run's status, metrics, and traceability (CHURN-17)."""
     run = churn_service.get_model_run(db, membership.organization_id, run_id)
-    return {"run": _run_schema(run)}
+    return {"run": _run_schema(db, run)}
 
 
 # --- scoring endpoints (CHURN-13..17) -----------------------------------------

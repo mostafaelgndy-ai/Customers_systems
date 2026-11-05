@@ -26,10 +26,16 @@ type Profile = {
   label_editable?: boolean;
 };
 
+// Backend persists profiles as a wrapper: {"segments": [...], "labels_editable": bool}.
+type RunProfilesPayload = {
+  segments: Profile[] | null;
+  labels_editable?: boolean;
+};
+
 type RunDetail = {
   id: string;
   status: string;
-  profiles: Profile[] | null;
+  profiles: RunProfilesPayload | null;
   warnings: string[] | null;
   candidate_report: unknown;
   error: string | null;
@@ -99,7 +105,8 @@ function RunProfiles({ runId }: { runId: string }) {
     [runId]
   );
   const run = data?.run;
-  const profiles = run?.profiles ?? [];
+  const profiles = run?.profiles?.segments ?? [];
+  const labelsEditable = run?.profiles?.labels_editable !== false;
 
   const [renaming, setRenaming] = useState<number | null>(null);
   const [newLabel, setNewLabel] = useState("");
@@ -147,8 +154,8 @@ function RunProfiles({ runId }: { runId: string }) {
         <p className="subtitle">Profiles not available for this run yet.</p>
       ) : (
         profiles.map((profile) => (
-          <div key={profile.cluster_id} className="bar-wrap">
-            <strong style={{ minWidth: "9rem" }}>
+          <div key={profile.cluster_id} className="bar-wrap bar-wrap-4">
+            <strong>
               {profile.descriptive_label || `Cluster ${profile.cluster_id}`}
             </strong>
             <div className="bar-track" role="img" aria-label={`${profile.descriptive_label}: ${profile.count} customers (${Math.round(profile.share * 100)}%)`}>
@@ -157,7 +164,7 @@ function RunProfiles({ runId }: { runId: string }) {
             <span>
               {profile.count} ({(profile.share * 100).toFixed(1)}%)
             </span>
-            {profile.label_editable !== false && (
+            {labelsEditable && profile.label_editable !== false && (
               <button
                 type="button"
                 className="btn btn-secondary btn-small"

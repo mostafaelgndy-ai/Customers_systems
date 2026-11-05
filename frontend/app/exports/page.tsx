@@ -67,7 +67,10 @@ export default function ExportsPage() {
       const link = document.createElement("a");
       link.href = url;
       link.download = `customeriq_export_${jobId.slice(0, 8)}.csv`;
+      // Safari/Firefox ignore clicks on detached elements; attach first.
+      document.body.appendChild(link);
       link.click();
+      link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
       setRequestError(err instanceof ApiError ? err.message : "Download failed.");

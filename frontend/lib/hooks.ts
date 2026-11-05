@@ -7,7 +7,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { api, me, loadActiveOrg, saveActiveOrg, clearTokens, ApiError, type Me } from "./api";
+import {
+  api,
+  me,
+  loadActiveOrg,
+  saveActiveOrg,
+  recoverActiveOrg,
+  clearTokens,
+  ApiError,
+  type Me,
+} from "./api";
 
 export function useAuthGuard() {
   const router = useRouter();
@@ -44,6 +53,26 @@ export function useAuthGuard() {
   return { profile, loading, error };
 }
 
+// Stale-organization recovery (M2): a 403 PERMISSION_DENIED usually means the
+// stored org id is dead (DB reset, org removed). Re-select the first org once,
+// then retry the request a single time; if it still fails the error surfaces.
+async function getWithOrgRecovery<T>(path: string): Promise<T> {
+  try {
+    return await api.get<T>(path);
+  } catch (err) {
+    if (
+      err instanceof ApiError &&
+      err.status === 403 &&
+      err.code === "PERMISSION_DENIED"
+    ) {
+      if (await recoverActiveOrg()) {
+        return await api.get<T>(path);
+      }
+    }
+    throw err;
+  }
+}
+
 // Shared list-fetch hook with loading/empty/error states (UI-14).
 export function useApiResource<T>(path: string, deps: unknown[] = []) {
   const router = useRouter();
@@ -62,8 +91,7 @@ export function useApiResource<T>(path: string, deps: unknown[] = []) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    api
-      .get<T>(path)
+    getWithOrgRecovery<T>(path)
       .then((result) => {
         if (!cancelled) {
           setData(result);

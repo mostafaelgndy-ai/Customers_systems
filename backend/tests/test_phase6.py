@@ -49,10 +49,12 @@ def test_churn_model_run_api_lifecycle(client, org_a_owner, org_b_owner, trained
     body = detail.json()["run"]
     assert body["status"] == "succeeded"
     assert body["metrics"] and "selection" in body["metrics"]  # CHURN-17 registry
+    assert isinstance(body["version_number"], int)  # human-friendly version label
 
     listing = client.get("/api/v1/churn/model-runs", headers=headers)
     assert listing.status_code == 200
-    assert listing.json()["total"] >= 1
+    listed = listing.json()["items"][0]
+    assert isinstance(listed["version_number"], int)
 
     cross = client.get(f"/api/v1/churn/model-runs/{run_id}", headers=org_b_owner["headers"])
     assert cross.status_code == 404  # SEC-01: cross-tenant read hidden

@@ -13,6 +13,12 @@ import { PageStates } from "../../../components/states";
 
 type Signal = { feature?: string; direction?: string; impact?: number };
 
+// Backend scoring emits "higher_risk" | "lower_risk" (scoring.py).
+function signalDirectionClass(direction: string | undefined): string {
+  if (direction === "up" || direction === "higher_risk") return "dir-up";
+  return "dir-down";
+}
+
 type CustomerDetail = {
   customer_id: string;
   dataset_version_id: string;
@@ -37,7 +43,13 @@ type CustomerDetail = {
   note: string;
 };
 
-type ModelRun = { id: string; status: string; dataset_version_id: string; train_cutoff_date: string | null };
+type ModelRun = {
+  id: string;
+  status: string;
+  dataset_version_id: string;
+  train_cutoff_date: string | null;
+  version_number?: number | null;
+};
 
 export default function CustomerDetailPage() {
   useAuthGuard();
@@ -75,9 +87,13 @@ export default function CustomerDetailPage() {
               value={versionId}
               onChange={(e) => setVersionOverride(e.target.value)}
             >
-              {succeededRuns.map((run) => (
+              {succeededRuns.map((run, index) => (
                 <option key={run.id} value={run.dataset_version_id}>
-                  version {run.dataset_version_id.slice(0, 8)}… (run {run.id.slice(0, 8)}…)
+                  {run.version_number
+                    ? `version v${run.version_number}`
+                    : `version ${run.dataset_version_id.slice(0, 8)}…`}
+                  {" (run "}
+                  {run.id.slice(0, 8)}…{index === 0 ? ", latest" : ""})
                 </option>
               ))}
             </select>
@@ -131,8 +147,8 @@ export default function CustomerDetailPage() {
                         <h2>Top signals behind this score</h2>
                         {detail.data.churn.explanation.top_signals.map((signal, index) => (
                           <div className="signal-row" key={index}>
-                            <span className={signal.direction === "up" ? "dir-up" : "dir-down"}>
-                              {signal.direction === "up" ? "▲" : "▼"}
+                            <span className={signalDirectionClass(signal.direction)}>
+                              {signalDirectionClass(signal.direction) === "dir-up" ? "▲" : "▼"}
                             </span>
                             <span>{signal.feature}</span>
                             {typeof signal.impact === "number" && (
