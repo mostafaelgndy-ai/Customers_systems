@@ -85,6 +85,9 @@ export default function SegmentsPage() {
         </div>
 
         {selected && <RunProfiles runId={selected} />}
+        {runs.filter((run) => run.status === "succeeded").length > 1 && selected && (
+          <RunCompare runs={runs.filter((run) => run.status === "succeeded")} baseRunId={selected} />
+        )}
       </PageStates>
     </>
   );
@@ -148,7 +151,7 @@ function RunProfiles({ runId }: { runId: string }) {
             <strong style={{ minWidth: "9rem" }}>
               {profile.descriptive_label || `Cluster ${profile.cluster_id}`}
             </strong>
-            <div className="bar-track">
+            <div className="bar-track" role="img" aria-label={`${profile.descriptive_label}: ${profile.count} customers (${Math.round(profile.share * 100)}%)`}>
               <div className="bar-fill bar-neutral" style={{ width: `${profile.share * 100}%` }} />
             </div>
             <span>
@@ -264,6 +267,99 @@ function LoadingLine() {
   return (
     <div className="card section">
       <p className="subtitle">Loading profiles…</p>
+    </div>
+  );
+}
+
+/** UI-15: cross-run comparison (SEG-10 report): descriptive share deltas
+ * with caveats — never presented as statistical significance. */
+function RunCompare({
+  runs,
+  baseRunId,
+}: {
+  runs: SegmentRun[];
+  baseRunId: string;
+}) {
+  const others = runs.filter((run) => run.id !== baseRunId);
+  const [compareRunId, setCompareRunId] = useState(others[0]?.id ?? "");
+  const { data, loading, error } = useApiResource<{
+    run_a: string;
+    run_b: string;
+    segment_share_deltas: Record<string, { run_a: number | null; run_b: number | null; change: number | null }>;
+    max_share_shift: number;
+    caveats: string[];
+  }>(
+    compareRunId
+      ? `/api/v1/segmentation/compare?run_a_id=${baseRunId}&run_b_id=${compareRunId}`
+      : "",
+    [baseRunId, compareRunId]
+  );
+
+  return (
+    <div className="card section">
+      <h2>Compare with another run (UI-15)</h2>
+      <label className="field" style={{ maxWidth: "26rem" }}>
+        <span className="field-label">Run B</span>
+        <select
+          className="input"
+          value={compareRunId}
+          onChange={(e) => setCompareRunId(e.target.value)}
+        >
+          {others.map((run) => (
+            <option key={run.id} value={run.id}>
+              {run.id.slice(0, 8)}… (k={run.selected_k ?? "—"})
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {loading && !data ? (
+        <p className="subtitle">Computing comparison…</p>
+      ) : error ? (
+        <div className="error-banner" style={{ marginTop: "0.75rem" }}>
+          {error.message}
+        </div>
+      ) : data ? (
+        <>
+          <div className="table-wrap" style={{ marginTop: "0.75rem" }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Cluster</th>
+                  <th>Run A share</th>
+                  <th>Run B share</th>
+                  <th>Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(data.segment_share_deltas).map(([cluster, delta]) => (
+                  <tr key={cluster}>
+                    <td>#{cluster}</td>
+                    <td>{delta.run_a === null ? "—" : `${(delta.run_a * 100).toFixed(1)}%`}</td>
+                    <td>{delta.run_b === null ? "—" : `${(delta.run_b * 100).toFixed(1)}%`}</td>
+                    <td>
+                      {delta.change === null ? (
+                        "—"
+                      ) : (
+                        <span className={delta.change >= 0 ? "dir-up" : "dir-down"}>
+                          {delta.change > 0 ? "+" : ""}
+                          {(delta.change * 100).toFixed(1)}%
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="hint">Largest single-segment share shift: {(data.max_share_shift * 100).toFixed(1)}%</p>
+          <ul style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+            {data.caveats.map((caveat, index) => (
+              <li key={index}>{caveat}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
     </div>
   );
 }

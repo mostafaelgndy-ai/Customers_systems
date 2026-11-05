@@ -110,7 +110,7 @@ export default function OverviewPage() {
             return (
               <div className="bar-wrap" key={band}>
                 <span className={`badge ${BAND_COLORS[band]}`}>{band}</span>
-                <div className="bar-track">
+                <div className="bar-track" role="img" aria-label={`${band} risk: ${count} of ${scoredTotal} customers (${Math.round(share * 100)}%)`}>
                   <div className={`bar-fill bar-${band}`} style={{ width: `${share * 100}%` }} />
                 </div>
                 <span>{count}</span>
