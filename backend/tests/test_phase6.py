@@ -127,6 +127,25 @@ def test_jobs_list_scoped_filtered_paginated(client, org_a_owner, org_b_owner, t
     assert other.json()["total"] == 0  # SEC-01: org-scoped
 
 
+# --- CHURN-13 (UI flow): succeeded training auto-queues batch scoring ----------
+
+
+def test_training_success_autoqueues_batch_scoring(client, org_a_owner, trained_model_run) -> None:
+    headers = org_a_owner["headers"]
+    run_id = trained_model_run["run_id"]
+
+    # Scores exist right after training, with no manual scoring request.
+    scores = client.get(f"/api/v1/churn/scores?model_run_id={run_id}", headers=headers)
+    assert scores.status_code == 200
+    assert scores.json()["total"] >= 1
+
+    # And the corresponding score job was recorded in the org's job list.
+    jobs = client.get("/api/v1/jobs", headers=headers).json()
+    scored_job = [j for j in jobs["items"] if j["type"] == "score_churn_model"]
+    assert scored_job, "expected an auto-queued score_churn_model job after training"
+    assert all(j["status"] == "succeeded" for j in scored_job)
+
+
 # --- API-10/JOB-06 + SEC-06: CSV export + audit trail ---------------------------
 
 

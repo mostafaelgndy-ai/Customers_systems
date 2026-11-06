@@ -343,6 +343,17 @@ async function main() {
     if (typeof runDetail.run.train_cutoff_date !== "string" && runDetail.run.train_cutoff_date !== null) {
       flag("UI-08/UI-09", "run.train_cutoff_date neither string nor null (used in selectors)");
     }
+    // CHURN-13 auto-score: training success must leave scores ready for the
+    // UI (overview/customers/exports pages) without a second manual call.
+    const autoScores = await authed(
+      "GET",
+      `/api/v1/churn/scores?model_run_id=${runId}&page=1&page_size=1`
+    );
+    if (Number(autoScores?.total ?? 0) < 1) {
+      flag("CHURN-13-auto", "no churn scores immediately after successful training (auto-score broken)");
+    } else {
+      ok("churn-13-auto scores ready right after training");
+    }
   }
 
   console.log("== 9. churn scoring + risk table + customer detail ==");

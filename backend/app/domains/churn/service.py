@@ -379,6 +379,24 @@ def execute_model_run(db: Session, *, run_id: uuid.UUID) -> dict[str, Any]:
         run.model_type = selected
     db.commit()
 
+    # CHURN-13 (product flow): a succeeded training run automatically
+    # queues batch scoring so the UI's results views populate without a
+    # second manual API call. Explicit `POST /churn/scores` still works
+    # and re-scores (idempotent). Auto-scoring never fails its training
+    # job: if it somehow cannot be queued, the run stays succeeded and a
+    # manual score request remains available.
+    auto_score_job_id: str | None = None
+    try:
+        score_job = create_score_run(
+            db,
+            org_id=run.organization_id,
+            user_id=run.created_by_user_id,
+            model_run_id=run.id,
+        )
+        auto_score_job_id = str(score_job.id)
+    except APIError:
+        pass
+
     return {
         "run_id": str(run.id),
         "status": run.status,
@@ -388,6 +406,7 @@ def execute_model_run(db: Session, *, run_id: uuid.UUID) -> dict[str, Any]:
         "artifact_path": run.artifact_path,
         "artifact_files": paths,
         "warnings": result.metadata["warnings"],
+        "auto_score_job_id": auto_score_job_id,
     }
 
 
