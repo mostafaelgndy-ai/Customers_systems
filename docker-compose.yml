@@ -41,6 +41,8 @@ services:
       INLINE_JOBS: "false"          # dev stack runs jobs on the Celery worker
       UPLOAD_DIR: /data/uploads
       EXPORTS_DIR: /data/exports
+      # browser origin allowed to call the API (CORSMiddleware)
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     volumes:
       - uploads:/data/uploads
       - exports:/data/exports
@@ -64,6 +66,7 @@ services:
       INLINE_JOBS: "false"
       UPLOAD_DIR: /data/uploads
       EXPORTS_DIR: /data/exports
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     volumes:
       - uploads:/data/uploads
       - exports:/data/exports

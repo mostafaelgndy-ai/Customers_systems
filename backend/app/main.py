@@ -103,6 +103,18 @@ def create_app() -> FastAPI:
 
     _health_router(app)
     app.add_middleware(RequestLoggingMiddleware)
+    if settings.cors_origins:
+        from fastapi.middleware.cors import CORSMiddleware
+
+        # TEST-18: the dashboard is a separate browser origin; allow it to
+        # call the API (preflight covers Authorization + X-Organization-ID).
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_credentials=False,  # bearer tokens, not cookies
+            allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-Organization-ID"],
+        )
     if settings.rate_limit_enabled:
         from app.core.rate_limit import RateLimitMiddleware
 

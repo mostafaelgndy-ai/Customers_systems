@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.domains.churn import service as churn_service
 from app.domains.datasets.models import DatasetVersion
-from app.domains.identity.deps import role_checker
+from app.domains.identity.deps import require_membership, role_checker
 from app.domains.identity.models import Membership
 
 router = APIRouter(prefix="/churn", tags=["churn"])
@@ -108,7 +108,7 @@ def generate_labels_endpoint(
 def list_labels_endpoint(
     *,
     db: Session = Depends(get_db),
-    membership: Membership = Depends(_LABEL_ROLES),
+    membership: Membership = Depends(require_membership),  # api-conventions §3: reads any role
     dataset_version_id: uuid.UUID,
     cutoff_date: str | None = Query(None),
     label_horizon_days: int | None = Query(None),
@@ -138,7 +138,7 @@ def list_labels_endpoint(
 def distribution_endpoint(
     *,
     db: Session = Depends(get_db),
-    membership: Membership = Depends(_LABEL_ROLES),
+    membership: Membership = Depends(require_membership),  # api-conventions §3: reads any role
     dataset_version_id: uuid.UUID,
     cutoff_date: str | None = Query(None),
     label_horizon_days: int | None = Query(None),
@@ -213,7 +213,7 @@ def create_model_run_endpoint(
 def list_model_runs_endpoint(
     *,
     db: Session = Depends(get_db),
-    membership: Membership = Depends(_LABEL_ROLES),
+    membership: Membership = Depends(require_membership),  # api-conventions §3: reads any role
     dataset_version_id: uuid.UUID | None = Query(None),
     status: str | None = Query(None, pattern="^(queued|running|succeeded|failed)$"),
     page: int = Query(1, ge=1),
@@ -242,7 +242,7 @@ def get_model_run_endpoint(
     run_id: uuid.UUID,
     *,
     db: Session = Depends(get_db),
-    membership: Membership = Depends(_LABEL_ROLES),
+    membership: Membership = Depends(require_membership),  # api-conventions §3: reads any role
 ) -> dict[str, Any]:
     """One training run's status, metrics, and traceability (CHURN-17)."""
     run = churn_service.get_model_run(db, membership.organization_id, run_id)
@@ -286,7 +286,7 @@ def create_scores_endpoint(
 def list_scores_endpoint(
     *,
     db: Session = Depends(get_db),
-    membership: Membership = Depends(_LABEL_ROLES),
+    membership: Membership = Depends(require_membership),  # api-conventions §3: reads any role
     model_run_id: uuid.UUID,
     risk_band: str | None = Query(None, pattern="^(low|medium|high)$"),
     order: str = Query("desc", pattern="^(asc|desc)$"),
@@ -326,7 +326,7 @@ def customer_score_endpoint(
     customer_id: str,
     *,
     db: Session = Depends(get_db),
-    membership: Membership = Depends(_LABEL_ROLES),
+    membership: Membership = Depends(require_membership),  # api-conventions §3: reads any role
     model_run_id: uuid.UUID,
 ) -> dict[str, Any]:
     """One customer's score with association-based explanations (CHURN-16)."""

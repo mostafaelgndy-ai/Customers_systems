@@ -14,12 +14,10 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.domains.customers import service as customers_service
-from app.domains.identity.deps import role_checker
+from app.domains.identity.deps import require_membership
 from app.domains.identity.models import Membership
 
 router = APIRouter(prefix="/customers", tags=["customers"])
-
-_ROLES = role_checker("owner", "admin", "analyst")
 
 
 @router.get("/{customer_id}")
@@ -27,7 +25,7 @@ def customer_detail_endpoint(
     customer_id: str,
     *,
     db: Session = Depends(get_db),
-    membership: Membership = Depends(_ROLES),
+    membership: Membership = Depends(require_membership),  # api-conventions §3: reads any role
     dataset_version_id: uuid.UUID,
 ) -> dict[str, Any]:
     """Unified customer view scoped to one dataset version (API-09)."""

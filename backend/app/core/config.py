@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+# The development-only default secret (TEST-17): prod startup must reject it.
+DEV_SECRET = "dev-secret-change-me"
 
 
 class Settings(BaseSettings):
@@ -28,11 +33,26 @@ class Settings(BaseSettings):
     inline_jobs: bool = True
 
     # --- security ---
-    secret_key: str = "dev-secret-change-me"
+    secret_key: str = DEV_SECRET
     jwt_algorithm: str = "HS256"
     access_token_expires_minutes: int = 30
     refresh_token_expires_days: int = 7
     bcrypt_rounds: int = 12
+
+    # --- CORS (TEST-18): the dashboard is browser-side, so the API must
+    # allow the frontend origin. Comma-separated via CORS_ORIGINS. Empty
+    # disables CORS entirely (for API-only deployments).
+    # NoDecode: plain strings must not be JSON-decoded by pydantic-settings;
+    # `_parse_cors_origins` below splits them instead.
+    cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, value: object) -> object:
+        """Accept 'http://a,http://b' as well as JSON ('[...]' required otherwise)."""
+        if isinstance(value, str):
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
 
     # --- uploads ---
     upload_dir: Path = Path("data/uploads")
@@ -69,6 +89,19 @@ class Settings(BaseSettings):
     @property
     def is_prod(self) -> bool:
         return self.environment == "prod"
+
+    @model_validator(mode="after")
+    def _reject_insecure_prod_settings(self) -> Settings:
+        """Fail fast when prod runs with development secrets (TEST-17/SEC-06)."""
+        if self.is_prod:
+            if self.secret_key == DEV_SECRET or len(self.secret_key) < 32:
+                raise ValueError(
+                    "SECRET_KEY must be a strong random value (>= 32 chars) in production; "
+                    "the development default is rejected."
+                )
+            if self.database_url.startswith("sqlite"):
+                raise ValueError("SQLite is not a production database; set DATABASE_URL.")
+        return self
 
     @property
     def max_upload_bytes(self) -> int:

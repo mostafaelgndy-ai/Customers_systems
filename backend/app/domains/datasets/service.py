@@ -6,6 +6,7 @@ Enforces tenant scoping and version immutability rules (DATA-06..12).
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -245,3 +246,188 @@ def attach_mapping(file: DatasetFile, mapping: dict[str, str]) -> None:
 
 def can_cancel(version: DatasetVersion) -> bool:
     return version.status == VERSION_VALIDATING
+
+
+def delete_dataset(db: Session, *, dataset: Dataset, user_id: uuid.UUID) -> dict[str, int]:
+    """Delete a dataset and every artifact derived from its versions (TEST-16).
+
+    Cascade (children first): scores -> labels -> model runs (incl. on-disk
+    artifacts) -> segment assignments -> segmentation runs -> snapshots ->
+    feature runs -> version files -> versions -> uploaded files (incl. on-disk
+    bytes). Job rows whose payload/result reference the dataset are removed
+    too, and export CSV files produced from deleted runs are unlinked.
+    Audit events are intentionally retained (security log, org-scoped).
+    """
+    from app.domains.audit.service import record_audit
+    from app.domains.churn.models import ChurnLabel, ChurnModelRun, ChurnScore
+    from app.domains.features.models import FeatureRun, FeatureSnapshot
+    from app.domains.jobs.models import JOB_SUCCEEDED, Job
+    from app.domains.segmentation.models import SegmentAssignment, SegmentationRun
+
+    org_id = dataset.organization_id
+    versions = list(db.scalars(select(DatasetVersion).where(DatasetVersion.dataset_id == dataset.id)))
+    version_ids = [v.id for v in versions]
+
+    counts: dict[str, int] = {}
+    # every derived artifact id: job payloads (exports, scoring, …) may carry
+    # any of these instead of the dataset id
+    derived_ids: set[str] = {str(v) for v in version_ids} | {str(dataset.id)}
+    seg_artifacts: Sequence[str | None] = []
+
+    # --- churn ------------------------------------------------------------
+    run_ids = list(
+        db.scalars(
+            select(ChurnModelRun.id).where(
+                ChurnModelRun.dataset_version_id.in_(version_ids),
+                ChurnModelRun.organization_id == org_id,
+            )
+        )
+    )
+    if run_ids:
+        counts["churn_scores"] = (
+            db.query(ChurnScore)
+            .where(ChurnScore.model_run_id.in_(run_ids), ChurnScore.organization_id == org_id)
+            .delete(synchronize_session=False)
+        )
+        derived_ids.update(str(r) for r in run_ids)
+        # artifacts on disk referenced by the deleted runs
+        artifact_paths = db.scalars(select(ChurnModelRun.artifact_path).where(ChurnModelRun.id.in_(run_ids))).all()
+        counts["artifacts_removed"] = _unlink_files(artifact_paths)
+        counts["churn_model_runs"] = (
+            db.query(ChurnModelRun).where(ChurnModelRun.id.in_(run_ids)).delete(synchronize_session=False)
+        )
+
+    if version_ids:
+        counts["churn_labels"] = (
+            db.query(ChurnLabel)
+            .where(
+                ChurnLabel.dataset_version_id.in_(version_ids),
+                ChurnLabel.organization_id == org_id,
+            )
+            .delete(synchronize_session=False)
+        )
+
+        # --- segmentation -------------------------------------------------
+        seg_run_ids = list(
+            db.scalars(
+                select(SegmentationRun.id).where(
+                    SegmentationRun.dataset_version_id.in_(version_ids),
+                    SegmentationRun.organization_id == org_id,
+                )
+            )
+        )
+        seg_artifacts = []
+        if seg_run_ids:
+            derived_ids.update(str(r) for r in seg_run_ids)
+            counts["segment_assignments"] = (
+                db.query(SegmentAssignment)
+                .where(
+                    SegmentAssignment.segmentation_run_id.in_(seg_run_ids),
+                    SegmentAssignment.organization_id == org_id,
+                )
+                .delete(synchronize_session=False)
+            )
+            seg_artifacts = db.scalars(
+                select(SegmentationRun.artifact_path).where(SegmentationRun.id.in_(seg_run_ids))
+            ).all()
+            counts["segmentation_runs"] = (
+                db.query(SegmentationRun).where(SegmentationRun.id.in_(seg_run_ids)).delete(synchronize_session=False)
+            )
+
+        # --- features -------------------------------------------------------
+        feature_run_ids = list(
+            db.scalars(
+                select(FeatureRun.id).where(
+                    FeatureRun.dataset_version_id.in_(version_ids),
+                    FeatureRun.organization_id == org_id,
+                )
+            )
+        )
+        if feature_run_ids:
+            derived_ids.update(str(r) for r in feature_run_ids)
+            counts["feature_snapshots"] = (
+                db.query(FeatureSnapshot)
+                .where(
+                    FeatureSnapshot.feature_run_id.in_(feature_run_ids),
+                    FeatureSnapshot.organization_id == org_id,
+                )
+                .delete(synchronize_session=False)
+            )
+            counts["feature_runs"] = (
+                db.query(FeatureRun).where(FeatureRun.id.in_(feature_run_ids)).delete(synchronize_session=False)
+            )
+
+        counts["version_files"] = (
+            db.query(DatasetVersionFile)
+            .where(DatasetVersionFile.dataset_version_id.in_(version_ids))
+            .delete(synchronize_session=False)
+        )
+        counts["versions"] = (
+            db.query(DatasetVersion).where(DatasetVersion.dataset_id == dataset.id).delete(synchronize_session=False)
+        )
+
+    # --- uploaded bytes -----------------------------------------------------
+    upload_paths = db.scalars(select(DatasetFile.storage_path).where(DatasetFile.dataset_id == dataset.id)).all()
+    for relative in upload_paths:
+        from contextlib import suppress
+
+        from app.domains.datasets.storage import delete_file
+
+        # path no longer resolvable is fine; the DB row is the source of truth
+        with suppress(APIError):
+            delete_file(relative)
+    counts["uploaded_files"] = (
+        db.query(DatasetFile).where(DatasetFile.dataset_id == dataset.id).delete(synchronize_session=False)
+    )
+    counts["artifacts_removed"] = counts.get("artifacts_removed", 0) + _unlink_files(seg_artifacts)
+
+    # --- jobs referencing the dataset or any derived run --------------------
+    job_rows = list(db.scalars(select(Job).where(Job.organization_id == org_id)).all())
+    job_files: list[str] = []
+    jobs_removed = 0
+    for job in job_rows:
+        blob = str(job.payload) + str(job.result)
+        if any(token in blob for token in derived_ids):
+            if job.job_type == "export_csv" and job.status == JOB_SUCCEEDED:
+                export_path = (job.result or {}).get("file_path", "")
+                if export_path:
+                    job_files.append(export_path)
+            db.delete(job)
+            jobs_removed += 1
+    counts["jobs"] = jobs_removed
+    counts["artifacts_removed"] = counts.get("artifacts_removed", 0) + _unlink_files(job_files)
+
+    db.delete(dataset)
+    record_audit(
+        db,
+        org_id=org_id,
+        user_id=user_id,
+        action="dataset.deleted",
+        resource_type="dataset",
+        resource_id=dataset.id,
+        details={"counts": counts},
+    )
+    return counts
+
+
+def _unlink_files(paths: Sequence[str | None]) -> int:
+    """Safely remove on-disk artifacts (model/export files); returns count."""
+    from pathlib import Path
+
+    from app.core.config import settings
+
+    uploads_root = Path(settings.upload_dir).resolve()
+    removed = 0
+    for raw in paths or []:
+        if not raw:
+            continue
+        candidate = Path(raw)
+        # Defense in depth: uploaded CSVs are handled via delete_file(); only
+        # artifact files outside the uploads tree are unlinked here.
+        if candidate.is_file() and uploads_root not in candidate.resolve().parents:
+            try:
+                candidate.unlink()
+                removed += 1
+            except OSError:
+                pass
+    return removed

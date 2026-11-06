@@ -18,7 +18,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.domains.identity.deps import role_checker
+from app.domains.identity.deps import require_membership, role_checker
 from app.domains.identity.models import Membership
 from app.domains.segmentation import service as segmentation_service
 
@@ -52,7 +52,7 @@ class SegmentRenameRequest(BaseModel):
 def list_runs_endpoint(
     *,
     db: Session = Depends(get_db),
-    membership: Membership = Depends(_ROLES),
+    membership: Membership = Depends(require_membership),  # api-conventions §3: reads any role
     status: str | None = Query(None, pattern="^(queued|running|succeeded|failed)$"),
     dataset_version_id: uuid.UUID | None = Query(None),
     page: int = Query(1, ge=1),
@@ -101,7 +101,7 @@ def get_run_endpoint(
     run_id: uuid.UUID,
     *,
     db: Session = Depends(get_db),
-    membership: Membership = Depends(_ROLES),
+    membership: Membership = Depends(require_membership),  # api-conventions §3: reads any role
 ) -> dict[str, Any]:
     run = segmentation_service.get_segmentation_run(db, membership.organization_id, run_id)
     return _run_schema(run)
@@ -112,7 +112,7 @@ def assignments_endpoint(
     run_id: uuid.UUID,
     *,
     db: Session = Depends(get_db),
-    membership: Membership = Depends(_ROLES),
+    membership: Membership = Depends(require_membership),  # api-conventions §3: reads any role
     cluster_id: int | None = Query(None, ge=0),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=200),
@@ -165,7 +165,7 @@ def rename_segment_endpoint(
 def compare_runs_endpoint(
     *,
     db: Session = Depends(get_db),
-    membership: Membership = Depends(_ROLES),
+    membership: Membership = Depends(require_membership),  # api-conventions §3: reads any role
     run_a_id: uuid.UUID,
     run_b_id: uuid.UUID,
 ) -> dict[str, Any]:

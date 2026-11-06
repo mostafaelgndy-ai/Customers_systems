@@ -120,6 +120,17 @@ def create_dataset(
         name=name,
         description=body.get("description"),
     )
+    from app.domains.audit.service import record_audit  # SEC-06: mutations audited
+
+    record_audit(
+        db,
+        org_id=membership.organization_id,
+        user_id=membership.user_id,
+        action="dataset.created",
+        resource_type="dataset",
+        resource_id=dataset.id,
+        details={"name": dataset.name},
+    )
     return {"dataset": _dataset_schema(dataset, None)}
 
 
@@ -169,6 +180,27 @@ def get_dataset(
     payload["files"] = [_file_schema(f) for f in files]
     payload["versions"] = [{"id": str(v.id), "version_number": v.version_number, "status": v.status} for v in versions]
     return payload
+
+
+_DELETE_ROLES = role_checker("owner", "admin")
+
+
+@router.delete("/{dataset_id}", status_code=204)
+def delete_dataset(
+    dataset_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    membership: Membership = Depends(_DELETE_ROLES),
+) -> Response:
+    """Delete a dataset and every derived artifact (TEST-16, PRD §11.3).
+
+    Owner/admin only. Cascades: scores, labels, model runs (+artifacts),
+    feature runs/snapshots, segment assignments/runs, versions, uploaded
+    files, and jobs referencing them. Audit events are retained.
+    """
+    dataset = ds_service.get_scoped_dataset(db, membership.organization_id, dataset_id)
+    ds_service.delete_dataset(db, dataset=dataset, user_id=membership.user_id)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.post("/{dataset_id}/files", status_code=201)
@@ -307,6 +339,17 @@ def create_version(
         created_by_user_id=membership.user_id,
         payload={"version_id": str(version.id)},
         correlation_id=request_id_var.get(),
+    )
+    from app.domains.audit.service import record_audit  # SEC-06: mutations audited
+
+    record_audit(
+        db,
+        org_id=membership.organization_id,
+        user_id=membership.user_id,
+        action="dataset.version_created",
+        resource_type="dataset_version",
+        resource_id=version.id,
+        details={"dataset_id": str(dataset.id)},
     )
     db.commit()
     version = ds_service.get_scoped_version(db, membership.organization_id, dataset, version.id)

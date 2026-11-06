@@ -185,3 +185,29 @@ def make_validated_dataset(
 
 def random_uuid() -> str:
     return str(uuid.uuid4())
+
+
+def add_organization_member(
+    app_db, *, organization_id, email: str, role: str, password: str = "hunter2hunter2"
+) -> dict:
+    """Insert a Role-into-org membership directly and return login tokens.
+
+    Roles are org-scoped (owner/admin/analyst/member). Used by role-matrix
+    tests (TEST-09); production grants happen via future invite flows.
+    """
+    from app.core.security import hash_password
+    from app.domains.identity.models import Membership, User
+
+    engine, factory = app_db
+    org_pk = uuid.UUID(str(organization_id))
+    with factory() as session:
+        user = User(
+            id=uuid.uuid4(),
+            email=email,
+            hashed_password=hash_password(password),
+            full_name="Role Test",
+        )
+        session.add(user)
+        session.add(Membership(id=uuid.uuid4(), user_id=user.id, organization_id=org_pk, role=role))
+        session.commit()
+    return {"user_id": user.id, "email": email, "password": password, "role": role}
