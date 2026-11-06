@@ -76,6 +76,10 @@ bounded server-side.
 - Tenant isolation is enforced **server-side on every query and
   mutation**; another organization's resource returns `404`, not `403`,
   to avoid resource-name disclosures.
+- **Explicit exception:** export download (`GET /exports/{job_id}/download`)
+  requires `analyst`+ (like data mutations, not read-only membership).
+  PII-bearing scored exports are the primary data-exfiltration surface,
+  so deliverables are intentionally gated higher than in-app reads.
 
 ## 4. Correlation & logging (ENG-07)
 

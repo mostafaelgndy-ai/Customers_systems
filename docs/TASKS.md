@@ -440,41 +440,74 @@ results, filter, and export without developer assistance.
 
 ### ML and data tests
 
--   [ ] **TEST-01 (P0):** Unit tests for every feature calculation.
--   [ ] **TEST-02 (P0):** Unit tests for churn label boundaries and
-    eligibility.
--   [ ] **TEST-03 (P0):** Leakage tests for time-based feature
-    generation.
--   [ ] **TEST-04 (P0):** Reproducibility tests for training and
-    segmentation.
--   [ ] **TEST-05 (P0):** Tests for imbalanced classes and undefined
-    evaluation metrics.
--   [ ] **TEST-06 (P0):** Tests for small datasets and insufficient
-    history.
--   [ ] **TEST-07 (P0):** Tests for malformed and inconsistent source
-    data.
+-   [x] **TEST-01 (P0):** Unit tests for every feature calculation.
+    (test_features.py: tenure/edge cases, eligibility window filters,
+    status + out-of-window exclusion, snapshot shape.)
+-   [x] **TEST-02 (P0):** Unit tests for churn label boundaries and
+    eligibility. (test_churn.py, test_training.py: ineligible future
+    periods, small-period warnings, cutoff derivation incl. "too short"
+    errors.)
+-   [x] **TEST-03 (P0):** Leakage tests for time-based feature
+    generation. (test_features.py `no_temporal_leakage_from_post_cutoff_orders`
+    + test_release_quality.py cutoff-feature invariance to future orders.)
+-   [x] **TEST-04 (P0):** Reproducibility tests for training and
+    segmentation. (test_training.py reproducible pipelines; test_release_quality.py
+    training reproducible across runs; segmentation seeded + preprocessing
+    persistence in test_segmentation.py.)
+-   [x] **TEST-05 (P0):** Tests for imbalanced classes and undefined
+    evaluation metrics. (test_training.py `safe_metrics_handle_undefined_cases`
+    + imbalance reporting; test_release_quality.py single-class population
+    fails with actionable error.)
+-   [x] **TEST-06 (P0):** Tests for small datasets and insufficient
+    history. (tiny-span "too short" errors, small-period warnings,
+    tiny-cluster warnings.)
+-   [x] **TEST-07 (P0):** Tests for malformed and inconsistent source
+    data. (test_validation.py: duplicates w/ row numbers, missing values,
+    mixed currency/timezone, invalid status + FK, future dates, partial
+    files; test_upload.py covers non-CSV/oversize.)
 
 ### Application tests
 
--   [ ] **TEST-08 (P0):** API integration tests for the full
-    upload-to-results workflow.
--   [ ] **TEST-09 (P0):** Tenant isolation and role authorization tests.
--   [ ] **TEST-10 (P0):** Background job retry/failure tests.
--   [ ] **TEST-11 (P0):** Export correctness and permission tests.
--   [ ] **TEST-12 (P1):** Frontend end-to-end tests for primary user
-    journeys.
--   [ ] **TEST-13 (P1):** Load test with a documented representative
-    dataset size.
+-   [x] **TEST-08 (P0):** API integration tests for the full
+    upload-to-results workflow. (test_e2e_workflow.py upload→map→validate→
+    features→train→score→segment→export.)
+-   [x] **TEST-09 (P0):** Tenant isolation and role authorization tests.
+    (test_tenant_isolation.py cross-org 404 indistinguishability;
+    test_role_auth.py role matrix incl. export-download analyst+.)
+-   [~] **TEST-10 (P0):** Background job retry/failure tests.
+    *Note:* queue-level covered (cancel queued/final, retry failed version
+    in test_jobs.py; failed-runs-never-stuck guard JOB-09 in test_phase6.py);
+    Celery-side retry policy itself is not exercised (tests run inline mode).
+-   [x] **TEST-11 (P0):** Export correctness and permission tests.
+    (churn_scores CSV content + download + audit, segment_assignments
+    export; download permission rows in test_role_auth.py.)
+-   [~] **TEST-12 (P1):** Frontend end-to-end tests for primary user
+    journeys. *Note:* harness-level replay of every UI API call
+    (frontend/e2e/run_flow_test.mjs, CI e2e job) pins shapes/flows;
+    no browser automation (Playwright) yet — deferred with note.
+-   [x] **TEST-13 (P1):** Load test with a documented representative
+    dataset size. (loadtest/load_test.mjs, 3k customers/~15k orders,
+    ~106 s pipeline; numbers in docs/LOAD_TEST.md.)
 
 ### Release quality
 
--   [ ] **TEST-14 (P0):** Create a release checklist.
--   [ ] **TEST-15 (P0):** Verify database backup and restore procedure.
--   [ ] **TEST-16 (P0):** Verify data deletion procedure.
--   [ ] **TEST-17 (P0):** Verify production secrets and environment
-    configuration.
--   [ ] **TEST-18 (P0):** Run security review before onboarding real
-    customer data.
+-   [x] **TEST-14 (P0):** Create a release checklist.
+    (docs/RELEASE_CHECKLIST.md; known gaps documented incl. unshared
+    models dir before multi-node deployments.)
+-   [x] **TEST-15 (P0):** Verify database backup and restore procedure.
+    (docs/BACKUP_RESTORE.md — live pg_dump→restore row-count match on all
+    application tables; PowerShell binary-pipe pitfall documented.)
+-   [x] **TEST-16 (P0):** Verify data deletion procedure. (cascade
+    deletion live-verified incl. zero-children edge; test_deletion.py.)
+-   [~] **TEST-17 (P0):** Verify production secrets and environment
+    configuration. *Note:* config guards tested (SESSION/prod SECRET_KEY
+    validator, CORS NoDecode parsing in test_release_quality.py) and
+    inventory documented in docs/SECURITY_REVIEW.md §1; actual prod
+    secret values land with the deploy (Phase 9).
+-   [x] **TEST-18 (P0):** Run security review before onboarding real
+    customer data. (docs/SECURITY_REVIEW.md; export-download analyst+
+    exception documented in api-conventions.md §3. HTTPS termination and
+    enabling RATE_LIMIT remain release requirements, tracked in OPS-02.)
 
 ------------------------------------------------------------------------
 

@@ -62,6 +62,7 @@ jobs:
         working-directory: backend
       - name: Start API (SQLite, inline jobs)
         run: |
+          alembic upgrade head
           uvicorn app.main:app --port 8000 &
           for i in $(seq 1 30); do
             if curl -sf http://localhost:8000/health > /dev/null; then echo "API up"; break; fi

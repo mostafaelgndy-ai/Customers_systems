@@ -24,7 +24,11 @@ def upgrade() -> None:
         "feature_runs",
         sa.Column("observation_days", sa.Integer(), nullable=False, server_default="180"),
     )
-    op.alter_column("feature_runs", "observation_days", server_default=None)
+    # SQLite renders this as `ALTER TABLE ... ALTER COLUMN ... DROP DEFAULT`,
+    # which it does not support (Postgres does). On SQLite the one-off
+    # server_default from add_column is harmless to keep on existing rows.
+    if op.get_bind().dialect.name != "sqlite":
+        op.alter_column("feature_runs", "observation_days", server_default=None)
 
 
 def downgrade() -> None:
